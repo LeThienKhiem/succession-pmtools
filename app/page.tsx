@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { getProject, getMilestones, getSprints, getTasksByProject, getTeamMembers, computeStats } from '@/lib/queries'
-import { GOALS, SPRINTS as MOCK_SPRINTS } from '@/lib/mock-data'
+import { PROJECT, GOALS, MILESTONES, SPRINTS as MOCK_SPRINTS, TASKS, TEAM_MEMBERS } from '@/lib/mock-data'
 import { CheckCircle2, Clock, Target, Users, CalendarDays, TrendingUp, AlertTriangle, Zap, ArrowRight } from 'lucide-react'
 
 function formatDate(d: string) {
@@ -8,18 +8,36 @@ function formatDate(d: string) {
 }
 
 export default async function OverviewPage() {
-  const project   = await getProject()
-  const members   = await getTeamMembers()
-  const milestones = await getMilestones(project.id)
-  const sprints   = await getSprints(project.id)
-  const allTasks  = await getTasksByProject(project.id)
+  // Try Supabase; fall back to mock data if env vars missing or DB unreachable
+  let project    = PROJECT as any
+  let members    = TEAM_MEMBERS as any[]
+  let milestones = MILESTONES as any[]
+  let sprints    = MOCK_SPRINTS as any[]
+  let allTasks   = TASKS as any[]
 
-  const activeSprint = sprints.find(s => s.status === 'active')
+  try {
+    const dbProject = await getProject()
+    const [dbMembers, dbMilestones, dbSprints, dbTasks] = await Promise.all([
+      getTeamMembers(),
+      getMilestones(dbProject.id),
+      getSprints(dbProject.id),
+      getTasksByProject(dbProject.id),
+    ])
+    project    = dbProject
+    if (dbMembers.length    > 0) members    = dbMembers
+    if (dbMilestones.length > 0) milestones = dbMilestones
+    if (dbSprints.length    > 0) sprints    = dbSprints
+    if (dbTasks.length      > 0) allTasks   = dbTasks
+  } catch {
+    // DB unavailable — continue with mock data above
+  }
+
+  const activeSprint = sprints.find((s: any) => s.status === 'active')
   const activeSprintHref = activeSprint
     ? `/sprint/${MOCK_SPRINTS.find(m => m.name === activeSprint.name)?.id ?? activeSprint.id}`
     : null
-  const activeStats  = activeSprint
-    ? computeStats(allTasks.filter(t => t.sprint_id === activeSprint.id))
+  const activeStats = activeSprint
+    ? computeStats(allTasks.filter((t: any) => t.sprint_id === activeSprint.id))
     : { total: 0, done: 0, inProgress: 0, blocked: 0, critical: 0 }
 
   const totalStats = computeStats(allTasks)
@@ -153,7 +171,7 @@ export default async function OverviewPage() {
             <h2 className="text-sm font-semibold text-gray-900">Mốc quan trọng</h2>
           </div>
           <ol className="space-y-3">
-            {milestones.slice(0, 5).map((ms, i) => (
+            {milestones.slice(0, 5).map((ms: any, i: number) => (
               <li key={ms.id} className="flex gap-3">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
                   ms.is_done ? 'bg-green-500 text-white' : i === 0 ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'
@@ -162,7 +180,7 @@ export default async function OverviewPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-indigo-600 font-medium">
-                    {new Date(ms.target_date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    {new Date(ms.target_date ?? ms.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </p>
                   <p className="text-sm font-semibold text-gray-900 leading-snug">{ms.title}</p>
                   {ms.description && <p className="text-xs text-gray-500 leading-snug">{ms.description}</p>}
