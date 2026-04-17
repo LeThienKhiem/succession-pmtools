@@ -82,6 +82,15 @@ export async function POST(req: Request) {
     inputLabel = `Excel report: ${file.name}`
   }
 
+  else if (type === 'project-doc') {
+    // Doc already extracted client-side, content passed directly
+    const docText = formData.get('doc_text') as string ?? ''
+    const docName = formData.get('doc_name') as string ?? 'tài liệu'
+    if (!docText.trim()) return Response.json({ error: 'Nội dung tài liệu trống' }, { status: 400 })
+    inputText  = docText.slice(0, 40000)
+    inputLabel = `tài liệu dự án: ${docName}`
+  }
+
   else {
     return Response.json({ error: 'type không hợp lệ' }, { status: 400 })
   }
