@@ -177,6 +177,23 @@ export async function updateTask(id: string, patch: Partial<Task>) {
 }
 
 export async function updateTeamMember(id: string, patch: { name?: string; role?: string }) {
+  if (!UUID_RE.test(id)) return
   const { error } = await supabase.from('pm_team_members').update(patch as Record<string, unknown>).eq('id', id)
   if (error) console.error('updateTeamMember error:', error.message)
+}
+
+export async function addTeamMember(m: Omit<TeamMember, 'id'>): Promise<TeamMember | null> {
+  const { data, error } = await supabase
+    .from('pm_team_members')
+    .insert({ code: m.code, name: m.name, role: m.role, color: m.color, is_active: true })
+    .select()
+    .single()
+  if (error) { console.error('addTeamMember error:', error.message); return null }
+  return data as TeamMember
+}
+
+export async function deleteTeamMember(id: string) {
+  if (!UUID_RE.test(id)) return
+  const { error } = await supabase.from('pm_team_members').update({ is_active: false }).eq('id', id)
+  if (error) console.error('deleteTeamMember error:', error.message)
 }
