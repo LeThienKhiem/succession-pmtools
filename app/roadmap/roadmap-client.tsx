@@ -380,9 +380,6 @@ export function RoadmapClient({ sprints, tasks: initialTasks, members: initialMe
                   {tooltip.task.priority}
                 </span>
               )}
-              {tooltip.task.pre_holiday && (
-                <p style={{ fontSize: 11, color: '#D97706', marginTop: 2 }}>Làm trong tuần nghỉ lễ</p>
-              )}
               {tooltip.task.description && (
                 <p style={{ fontSize: 11, color: '#9CA3AF', fontStyle: 'italic', marginTop: 4, lineHeight: 1.4 }}>
                   {truncate(tooltip.task.description, 80)}
@@ -489,9 +486,7 @@ function SprintBlock({
   }, {})
   const total = Object.values(assigneeCounts).reduce((a, b) => a + b, 0)
 
-  const preHolidayCount = allSprintTasks.filter(t => t.pre_holiday).length
-
-  const dayOrder = DAY_ORDER[sprint.id] ?? []
+const dayOrder = DAY_ORDER[sprint.id] ?? []
   const allDaysInSprint = [...new Set([...dayOrder, ...allSprintTasks.map(t => t.day_label)])]
     .filter(d => d && d !== 'Sprint 3' && d !== 'Sprint 4')
     .sort((a, b) => {
@@ -549,12 +544,6 @@ function SprintBlock({
           </div>
         )}
 
-        {/* Pre-holiday note */}
-        {preHolidayCount > 0 && (
-          <div className="mt-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
-            {memberLabel('ba1', members)} nên làm {preHolidayCount} spec tasks này trong tuần nghỉ lễ để dev bắt đầu ngay T2 05/5
-          </div>
-        )}
       </div>
 
       {/* Body */}
@@ -755,11 +744,6 @@ function TaskDrawer({
             </div>
           )}
 
-          {task.pre_holiday && (
-            <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
-              Nên làm trong tuần nghỉ lễ 25/4 – 4/5
-            </div>
-          )}
 
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Trạng thái</p>

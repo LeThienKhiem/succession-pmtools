@@ -1,5 +1,5 @@
 import { getProject, getMilestones, getSprints, getTasksByProject, getTeamMembers, computeStats } from '@/lib/queries'
-import { EPICS, CRITICAL_ITEMS, TASK_TYPE_STYLES, STATUS_STYLES, PRIORITY_STYLES } from '@/lib/mock-data'
+import { EPICS, TASK_TYPE_STYLES, STATUS_STYLES, PRIORITY_STYLES } from '@/lib/mock-data'
 import { CheckCircle2, AlertTriangle, Clock, Users, Target, TrendingUp, Zap, FileBarChart, Circle } from 'lucide-react'
 
 function fmt(d: string) {
@@ -260,26 +260,45 @@ export default async function ReportPage() {
       </div>
 
       {/* Critical items checklist */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-        <div className="flex items-center gap-2 mb-4">
-          <AlertTriangle size={16} className="text-red-500" />
-          <h2 className="text-sm font-semibold text-gray-900">17 Critical Items</h2>
-          <span className="text-xs text-gray-400 ml-auto">Must-have cho BOD Demo Day</span>
-        </div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-          {CRITICAL_ITEMS.map(item => (
-            <div key={item.n} className="flex items-start gap-2.5 py-1">
-              <div className="w-5 h-5 rounded-full border-2 border-gray-200 flex items-center justify-center shrink-0 mt-0.5">
-                <span className="text-[10px] font-bold text-gray-400">{item.n}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-700 leading-snug">{item.item}</p>
-                <span className="text-xs text-indigo-500 font-medium">{item.sprint}</span>
-              </div>
+      {(() => {
+        const criticalTasks = allTasks.filter(t => t.priority === 'critical')
+        return (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle size={16} className="text-red-500" />
+              <h2 className="text-sm font-semibold text-gray-900">{criticalTasks.length} Critical Items</h2>
+              <span className="text-xs text-gray-400 ml-auto">Must-have cho BOD Demo Day</span>
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+              {criticalTasks.map((task, i) => {
+                const sprintName = sprints.find(s => s.id === task.sprint_id)?.name ?? task.sprint_id
+                const statusStyle = STATUS_STYLES[task.status]
+                return (
+                  <div key={task.id} className="flex items-start gap-2.5 py-1">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                      task.status === 'done' ? 'bg-green-500 border-green-500' : 'border-gray-200'
+                    }`}>
+                      {task.status === 'done'
+                        ? <span className="text-[9px] text-white font-bold">✓</span>
+                        : <span className="text-[10px] font-bold text-gray-400">{i + 1}</span>
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm leading-snug ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                        {task.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-indigo-500 font-medium">{sprintName}</span>
+                        <span className="text-xs font-medium" style={{ color: statusStyle.text }}>{statusStyle.label}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Milestones */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
