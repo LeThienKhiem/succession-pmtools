@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, forwardRef } from 'react'
+import React, { useState, useRef, useEffect, forwardRef } from 'react'
 import {
   Bot, ChevronDown, ChevronUp, Link2, Upload, FileText, Table2,
   CheckCircle2, AlertTriangle, RotateCcw, Check, X, Loader2,
@@ -555,7 +555,7 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
 
       {/* ── CHAT TAB ─────────────────────────────────────────────────────────── */}
       {tab === 'chat' && (
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col" style={{ height: '560px' }}>
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 260px)', minHeight: '420px' }}>
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
@@ -591,12 +591,12 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
                     : <Bot size={14} className="text-gray-600" />
                   }
                 </div>
-                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                   msg.role === 'user'
-                    ? 'bg-indigo-600 text-white rounded-tr-sm'
+                    ? 'bg-indigo-600 text-white rounded-tr-sm whitespace-pre-wrap'
                     : 'bg-gray-100 text-gray-800 rounded-tl-sm'
                 }`}>
-                  {msg.content}
+                  {msg.role === 'user' ? msg.content : renderMarkdown(msg.content)}
                 </div>
               </div>
             ))}
@@ -657,6 +657,45 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
       )}
     </div>
   )
+}
+
+// ─── Simple Markdown renderer (bold, italic, inline code, bullet/numbered lists) ──
+
+function renderMarkdown(text: string) {
+  return text.split('\n').map((line, i) => {
+    // Numbered list: "1. text"
+    const numMatch = line.match(/^(\d+)\.\s+(.*)/)
+    // Bullet list: "- text" or "• text"
+    const bulletMatch = line.match(/^[-•]\s+(.*)/)
+
+    const content = numMatch ? numMatch[2] : bulletMatch ? bulletMatch[1] : line
+    const inline  = renderInline(content)
+
+    if (numMatch) {
+      return <div key={i} className="flex gap-2 my-0.5"><span className="shrink-0 font-semibold">{numMatch[1]}.</span><span>{inline}</span></div>
+    }
+    if (bulletMatch) {
+      return <div key={i} className="flex gap-2 my-0.5"><span className="shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full bg-current opacity-50 inline-block" /><span>{inline}</span></div>
+    }
+    if (!line.trim()) return <div key={i} className="h-2" />
+    return <div key={i}>{inline}</div>
+  })
+}
+
+function renderInline(text: string): React.ReactNode[] {
+  // Handle **bold**, *italic*, `code`
+  const parts: React.ReactNode[] = []
+  const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g
+  let last = 0, m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    if (m[2])      parts.push(<strong key={m.index}>{m[2]}</strong>)
+    else if (m[3]) parts.push(<em key={m.index}>{m[3]}</em>)
+    else if (m[4]) parts.push(<code key={m.index} className="bg-black/10 rounded px-1 text-xs font-mono">{m[4]}</code>)
+    last = m.index + m[0].length
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts
 }
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
