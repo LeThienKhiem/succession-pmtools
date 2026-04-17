@@ -69,13 +69,27 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
   const [tasks,        setTasks]        = useState<Task[]>(initialTasks)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
 
-  // Restore saved positions + locally-created tasks
+  // Restore saved positions + locally-created / locally-edited tasks
   useEffect(() => {
     const saved    = loadOrder(sprintId)
     const newTasks = loadNewTasks(sprintId)
     setTasks(prev => {
-      const existingIds = new Set(prev.map(t => t.id))
-      let result = [...prev, ...newTasks.filter(t => !existingIds.has(t.id))]
+      const existingIds  = new Set(prev.map(t => t.id))
+      // Map of locally-persisted task data (non-UUID tasks only)
+      const localDataMap = new Map(newTasks.map(t => [t.id, t]))
+
+      // 1. Apply locally-saved full data back onto matching server tasks
+      //    (covers mock-ID tasks whose title/description were edited)
+      //    UUID tasks are never written to lsNewTasksKey so this is a no-op for them.
+      let result = prev.map(t => {
+        const local = localDataMap.get(t.id)
+        return local ? { ...t, ...local } : t
+      })
+
+      // 2. Append truly new locally-created tasks not present in server data
+      result = [...result, ...newTasks.filter(t => !existingIds.has(t.id))]
+
+      // 3. Apply status/sort_order overrides last (drag-drop order takes final precedence)
       if (saved) result = result.map(t => saved[t.id] ? { ...t, ...saved[t.id] } : t)
       return result
     })
