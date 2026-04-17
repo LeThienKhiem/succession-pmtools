@@ -12,6 +12,18 @@ export interface Proposal {
   confidence:     number
 }
 
+export interface TimelineRisk {
+  sprint:   string
+  risk:     string
+  severity: 'low' | 'medium' | 'high'
+}
+
+export interface AnalyzeResult {
+  proposals:       Proposal[]
+  suggestions:     string[]
+  timeline_risks:  TimelineRisk[]
+}
+
 export async function POST(req: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey || apiKey === 'sk-ant-') {
@@ -23,12 +35,14 @@ export async function POST(req: Request) {
   try { formData = await req.formData() }
   catch { return Response.json({ error: 'Invalid request' }, { status: 400 }) }
 
-  const type      = formData.get('type') as string
-  const url       = formData.get('url')  as string | null
-  const file      = formData.get('file') as File   | null
-  const tasks     = JSON.parse(formData.get('tasks')     as string ?? '[]')
-  const brain     = formData.get('brain')     as string ?? ''
-  const decisions = JSON.parse(formData.get('decisions') as string ?? '[]')
+  const type        = formData.get('type') as string
+  const url         = formData.get('url')  as string | null
+  const file        = formData.get('file') as File   | null
+  const tasks       = JSON.parse(formData.get('tasks')     as string ?? '[]')
+  const brain       = formData.get('brain')     as string ?? ''
+  const decisions   = JSON.parse(formData.get('decisions') as string ?? '[]')
+  const sprints     = JSON.parse(formData.get('sprints')   as string ?? '[]')
+  const currentDate = formData.get('currentDate') as string ?? new Date().toISOString().slice(0, 10)
 
   // ── Extract text / rows ──────────────────────────────────────────────────
   let inputText = ''
@@ -77,6 +91,24 @@ export async function POST(req: Request) {
     epic: t.epic_code, assignee: t.assignee_code, sprint: t.sprint_id,
   }))
 
+  // ── Build sprint / timeline context ──────────────────────────────────────
+  const sprintBlock = sprints.length > 0
+    ? '\n\n## Timeline & Sprints\nNgày hiện tại: ' + currentDate + '\n' +
+      sprints.map((s: any) => {
+        const daysLeft = s.end_date
+          ? Math.ceil((new Date(s.end_date).getTime() - new Date(currentDate).getTime()) / 86400000)
+          : null
+        const sprintTasks = tasks.filter((t: any) => t.sprint_id === s.id)
+        const done  = sprintTasks.filter((t: any) => t.status === 'done').length
+        const total = sprintTasks.length
+        const pct   = total ? Math.round(done * 100 / total) : 0
+        const suffix = s.status === 'active'
+          ? ` ← ĐANG CHẠY | còn ${daysLeft !== null ? daysLeft : '?'} ngày | ${done}/${total} tasks done (${pct}%)`
+          : ` [${s.status}]`
+        return `- ${s.name} (${s.start_date} → ${s.end_date})${suffix}`
+      }).join('\n')
+    : ''
+
   // ── Call Claude with prompt caching ─────────────────────────────────────
   const client = new Anthropic({ apiKey })
 
@@ -87,9 +119,11 @@ export async function POST(req: Request) {
       ).join('\n')
     : ''
 
-  const systemPrompt = `Bạn là PM Bot của dự án SuccessionOS. Nhiệm vụ: phân tích tài liệu đầu vào và đề xuất cập nhật trạng thái các task.
+  const isReport = type === 'report'
 
-${brain}${decisionsBlock}
+  const systemPrompt = `Bạn là PM Bot của dự án SuccessionOS. Nhiệm vụ: phân tích tài liệu đầu vào, đề xuất cập nhật trạng thái task, đưa ra gợi ý và cảnh báo timeline.
+
+${brain}${decisionsBlock}${sprintBlock}
 
 Danh sách tasks hiện tại:
 ${JSON.stringify(taskSummary, null, 2)}
@@ -98,14 +132,20 @@ Quy tắc:
 - Chỉ đề xuất tasks thực sự có thay đổi trạng thái
 - Trả về ĐÚNG task_id từ danh sách trên
 - Confidence: 0.9+ nếu chắc chắn, 0.7–0.9 nếu suy luận, dưới 0.7 thì bỏ qua
+${isReport ? `- Với daily report: phân tích tiến độ dev, đề xuất cập nhật status, đưa gợi ý hành động cụ thể
+- timeline_risks: cảnh báo nếu sprint hiện tại có nguy cơ trễ (pace thấp, quá nhiều blocked, ngày còn ít mà tasks còn nhiều)` : ''}
 - Trả về JSON thuần, không markdown, không giải thích thêm`
 
-  const userPrompt = `Phân tích ${inputLabel} sau và đề xuất cập nhật tasks:
+  const userPrompt = `Phân tích ${inputLabel} sau:
 
 ${inputText}
 
-Trả về JSON array (chỉ JSON, không gì khác):
-[{"task_id":"...","task_title":"...","current_status":"...","new_status":"todo|in-progress|done|blocked","note":"lý do ngắn gọn","confidence":0.95}]`
+Trả về JSON object (chỉ JSON, không gì khác):
+{
+  "proposals": [{"task_id":"...","task_title":"...","current_status":"...","new_status":"todo|in-progress|done|blocked","note":"lý do ngắn gọn","confidence":0.95}],
+  "suggestions": ["gợi ý hành động 1","gợi ý 2"],
+  "timeline_risks": [{"sprint":"Sprint X","risk":"mô tả rủi ro","severity":"low|medium|high"}]
+}`
 
   let raw = ''
   try {
@@ -121,19 +161,36 @@ Trả về JSON array (chỉ JSON, không gì khác):
   }
 
   // ── Parse response ───────────────────────────────────────────────────────
-  let proposals: Proposal[] = []
+  let result: AnalyzeResult = { proposals: [], suggestions: [], timeline_risks: [] }
   try {
     const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
-    proposals = JSON.parse(cleaned)
-    if (!Array.isArray(proposals)) proposals = []
+    const parsed = JSON.parse(cleaned)
+    if (Array.isArray(parsed)) {
+      // Backwards compat: if Claude returned bare array
+      result.proposals = parsed
+    } else {
+      result.proposals      = Array.isArray(parsed.proposals)      ? parsed.proposals      : []
+      result.suggestions    = Array.isArray(parsed.suggestions)    ? parsed.suggestions    : []
+      result.timeline_risks = Array.isArray(parsed.timeline_risks) ? parsed.timeline_risks : []
+    }
   } catch {
-    const match = raw.match(/\[[\s\S]*\]/)
+    const match = raw.match(/\{[\s\S]*\}/)
     if (match) {
-      try { proposals = JSON.parse(match[0]) } catch { proposals = [] }
+      try {
+        const parsed = JSON.parse(match[0])
+        result.proposals      = Array.isArray(parsed.proposals)      ? parsed.proposals      : []
+        result.suggestions    = Array.isArray(parsed.suggestions)    ? parsed.suggestions    : []
+        result.timeline_risks = Array.isArray(parsed.timeline_risks) ? parsed.timeline_risks : []
+      } catch {}
+    } else {
+      const arrMatch = raw.match(/\[[\s\S]*\]/)
+      if (arrMatch) {
+        try { result.proposals = JSON.parse(arrMatch[0]) } catch {}
+      }
     }
   }
 
-  return Response.json({ proposals })
+  return Response.json(result)
 }
 
 function extractGoogleDocId(url: string): string | null {

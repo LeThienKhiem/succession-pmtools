@@ -1,8 +1,14 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { X, Clock, User, Tag, Calendar, Flag, Plus, Trash2, Link as LinkIcon, Pencil, Check } from 'lucide-react'
+import { X, Clock, User, Tag, Calendar, Plus, Trash2, Link as LinkIcon, Pencil, Check, Bot, Upload, Link2, Loader2, AlertTriangle, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import { TASK_TYPE_STYLES, STATUS_STYLES, PRIORITY_STYLES, type Task, type TaskPriority, type TaskType } from '@/lib/mock-data'
+import { DEFAULT_BRAIN } from '@/lib/default-brain'
+
+const LS_BRAIN_KEY = 'pm-project-brain'
+function loadBrain() {
+  try { return localStorage.getItem(LS_BRAIN_KEY) ?? DEFAULT_BRAIN } catch { return DEFAULT_BRAIN }
+}
 
 interface Member { id: string; code: string; name: string; color: string; role: string }
 interface Epic   { id: string; code: string; name: string; color: string }
@@ -47,6 +53,16 @@ export function TaskDetailModal({ task, members, epics, onClose, onUpdate }: Pro
   const [documents,    setDocuments]    = useState<string[]>(task.documents ?? [])
   const [newUrl,       setNewUrl]       = useState('')
   const [urlError,     setUrlError]     = useState('')
+
+  // ── Spec analysis ──────────────────────────────────────────────────────────
+  const [showSpec,      setShowSpec]      = useState(false)
+  const [specInput,     setSpecInput]     = useState<'url' | 'file'>('url')
+  const [specUrl,       setSpecUrl]       = useState('')
+  const [specFile,      setSpecFile]      = useState<File | null>(null)
+  const [specAnalyzing, setSpecAnalyzing] = useState(false)
+  const [specError,     setSpecError]     = useState<string | null>(null)
+  const [specPoints,    setSpecPoints]    = useState<string[]>([])
+  const specFileRef = useRef<HTMLInputElement>(null)
 
   const titleRef = useRef<HTMLTextAreaElement>(null)
   const dayRef   = useRef<HTMLInputElement>(null)
@@ -101,6 +117,41 @@ export function TaskDetailModal({ task, members, epics, onClose, onUpdate }: Pro
 
   function handleDescriptionBlur() {
     onUpdate(task.id, { description: description.trim() || undefined })
+  }
+
+  async function handleSpecAnalyze() {
+    setSpecError(null)
+    setSpecPoints([])
+    setSpecAnalyzing(true)
+    try {
+      const brain = loadBrain()
+      const fd = new FormData()
+      fd.append('brain', brain)
+      fd.append('task', JSON.stringify({
+        id: task.id, title: task.title,
+        epic_code: task.epic_code, type: task.type,
+      }))
+      if (specInput === 'url') {
+        if (!specUrl.trim()) { setSpecError('Nhập URL Google Docs'); setSpecAnalyzing(false); return }
+        fd.append('type', 'doc-url')
+        fd.append('url', specUrl.trim())
+      } else {
+        if (!specFile) { setSpecError('Chọn file'); setSpecAnalyzing(false); return }
+        fd.append('type', 'doc-file')
+        fd.append('file', specFile)
+      }
+      const res  = await fetch('/api/bot/analyze-spec', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok || json.error) { setSpecError(json.error ?? 'Lỗi không xác định'); return }
+      // Fill description + save
+      setDescription(json.description)
+      setSpecPoints(json.key_points ?? [])
+      onUpdate(task.id, { description: json.description })
+    } catch (e: any) {
+      setSpecError(e.message)
+    } finally {
+      setSpecAnalyzing(false)
+    }
   }
 
   function addDocument() {
@@ -363,6 +414,102 @@ export function TaskDetailModal({ task, members, epics, onClose, onUpdate }: Pro
               rows={3}
               className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent placeholder-gray-300 bg-gray-50 hover:bg-white transition-colors"
             />
+          </div>
+
+          {/* Spec Analysis */}
+          <div className="border border-gray-100 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setShowSpec(v => !v)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+            >
+              <Bot size={13} className="text-indigo-500 shrink-0" />
+              <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Phân tích Spec bằng AI</span>
+              <span className="text-xs text-gray-400 font-normal ml-1">— tự điền mô tả từ tài liệu</span>
+              <div className="flex-1" />
+              {showSpec ? <ChevronUp size={13} className="text-gray-400" /> : <ChevronDown size={13} className="text-gray-400" />}
+            </button>
+
+            {showSpec && (
+              <div className="px-4 py-3 space-y-3 bg-white">
+                {/* Sub-toggle */}
+                <div className="flex items-center gap-2">
+                  {([
+                    { key: 'url',  label: 'Google Docs URL', icon: Link2 },
+                    { key: 'file', label: 'Upload .docx',    icon: Upload },
+                  ] as const).map(({ key, label, icon: Icon }) => (
+                    <button key={key} onClick={() => { setSpecInput(key); setSpecFile(null); setSpecError(null) }}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                        specInput === key
+                          ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                          : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                      }`}>
+                      <Icon size={11} /> {label}
+                    </button>
+                  ))}
+                </div>
+
+                {specInput === 'url' ? (
+                  <input
+                    value={specUrl}
+                    onChange={e => { setSpecUrl(e.target.value); setSpecError(null) }}
+                    placeholder="https://docs.google.com/document/d/..."
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  />
+                ) : (
+                  <div>
+                    {specFile ? (
+                      <div className="flex items-center gap-2 px-3 py-2 border border-indigo-200 bg-indigo-50 rounded-lg">
+                        <span className="flex-1 text-xs text-indigo-700 truncate font-medium">{specFile.name}</span>
+                        <button onClick={() => { setSpecFile(null); if (specFileRef.current) specFileRef.current.value = '' }}
+                          className="text-indigo-400 hover:text-indigo-700 transition-colors">
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => specFileRef.current?.click()}
+                        className="flex items-center justify-center gap-2 h-14 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:border-indigo-300 hover:bg-gray-50 transition-colors"
+                      >
+                        <Upload size={14} className="text-gray-400" />
+                        <p className="text-xs text-gray-400">Chọn <span className="text-indigo-500 font-medium">.docx</span> hoặc .txt</p>
+                      </div>
+                    )}
+                    <input ref={specFileRef} type="file" accept=".docx,.txt,.md" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) { setSpecFile(f); setSpecError(null) } }} />
+                  </div>
+                )}
+
+                {specError && (
+                  <div className="flex items-start gap-1.5 text-xs text-red-600">
+                    <AlertTriangle size={12} className="shrink-0 mt-0.5" /> {specError}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleSpecAnalyze}
+                  disabled={specAnalyzing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {specAnalyzing
+                    ? <><Loader2 size={11} className="animate-spin" /> Đang phân tích...</>
+                    : <><Sparkles size={11} /> Phân tích & điền mô tả</>
+                  }
+                </button>
+
+                {specPoints.length > 0 && (
+                  <div className="bg-indigo-50 rounded-lg p-3 space-y-1">
+                    <p className="text-xs font-semibold text-indigo-700 mb-1.5">Điểm chính từ spec:</p>
+                    {specPoints.map((pt, i) => (
+                      <div key={i} className="flex items-start gap-1.5">
+                        <span className="text-indigo-400 text-xs shrink-0 mt-0.5">•</span>
+                        <p className="text-xs text-indigo-800">{pt}</p>
+                      </div>
+                    ))}
+                    <p className="text-xs text-indigo-500 mt-2">✓ Mô tả đã được cập nhật tự động</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Documents */}

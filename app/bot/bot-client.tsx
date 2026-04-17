@@ -1,18 +1,19 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Bot, ChevronDown, ChevronUp, Link2, Upload, FileText, Table2, CheckCircle2, AlertTriangle, RotateCcw, Check, X, Loader2, Brain, BookOpen } from 'lucide-react'
+import { Bot, ChevronDown, ChevronUp, Link2, Upload, FileText, Table2, CheckCircle2, AlertTriangle, RotateCcw, Check, X, Loader2, Brain, BookOpen, Lightbulb, Clock } from 'lucide-react'
 import { DEFAULT_BRAIN } from '@/lib/default-brain'
 import { loadDocs, formatBytes, type ProjectDoc } from '@/lib/project-docs'
 import { updateTask, getDecisions, type Decision } from '@/lib/queries'
 import type { Task } from '@/lib/mock-data'
-import type { Proposal } from '@/app/api/bot/analyze/route'
+import type { Proposal, TimelineRisk } from '@/app/api/bot/analyze/route'
 
 const LS_BRAIN_KEY = 'pm-project-brain'
 
 interface Props {
-  tasks: Task[]
-  members: any[]
+  tasks:     Task[]
+  members:   any[]
+  sprints:   any[]
   projectId: string
 }
 
@@ -26,7 +27,7 @@ function saveBrain(v: string) {
   try { localStorage.setItem(LS_BRAIN_KEY, v) } catch {}
 }
 
-export function BotClient({ tasks, projectId }: Props) {
+export function BotClient({ tasks, sprints, projectId }: Props) {
   const [tab, setTab]             = useState<Tab>('doc')
   const [docInput, setDocInput]   = useState<DocInput>('url')
   const [url, setUrl]             = useState('')
@@ -35,9 +36,11 @@ export function BotClient({ tasks, projectId }: Props) {
   const [showBrain, setShowBrain] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError]         = useState<string | null>(null)
-  const [proposals, setProposals] = useState<(Proposal & { selected: boolean })[]>([])
-  const [applied, setApplied]     = useState(false)
-  const [applying, setApplying]   = useState(false)
+  const [proposals,      setProposals]      = useState<(Proposal & { selected: boolean })[]>([])
+  const [suggestions,    setSuggestions]    = useState<string[]>([])
+  const [timelineRisks,  setTimelineRisks]  = useState<TimelineRisk[]>([])
+  const [applied,        setApplied]        = useState(false)
+  const [applying,       setApplying]       = useState(false)
   const [projectDocs, setProjectDocs]      = useState<ProjectDoc[]>([])
   const [includedDocIds, setIncludedDocIds] = useState<Set<string>>(new Set())
   const [decisions, setDecisions]           = useState<Decision[]>([])
@@ -61,6 +64,8 @@ export function BotClient({ tasks, projectId }: Props) {
   async function handleAnalyze() {
     setError(null)
     setProposals([])
+    setSuggestions([])
+    setTimelineRisks([])
     setApplied(false)
     setAnalyzing(true)
 
@@ -74,9 +79,11 @@ export function BotClient({ tasks, projectId }: Props) {
         : brain
 
       const fd = new FormData()
-      fd.append('tasks',     JSON.stringify(tasks))
-      fd.append('brain',     brainWithDocs)
-      fd.append('decisions', JSON.stringify(decisions))
+      fd.append('tasks',       JSON.stringify(tasks))
+      fd.append('brain',       brainWithDocs)
+      fd.append('decisions',   JSON.stringify(decisions))
+      fd.append('sprints',     JSON.stringify(sprints))
+      fd.append('currentDate', new Date().toISOString().slice(0, 10))
 
       if (tab === 'doc') {
         if (docInput === 'url') {
@@ -102,12 +109,14 @@ export function BotClient({ tasks, projectId }: Props) {
         return
       }
 
-      if (!json.proposals?.length) {
-        setError('Bot không tìm thấy thay đổi nào cần cập nhật.')
+      if (!json.proposals?.length && !json.suggestions?.length && !json.timeline_risks?.length) {
+        setError('Bot không tìm thấy thay đổi hay gợi ý nào.')
         return
       }
 
-      setProposals(json.proposals.map((p: Proposal) => ({ ...p, selected: p.confidence >= 0.75 })))
+      setProposals((json.proposals ?? []).map((p: Proposal) => ({ ...p, selected: p.confidence >= 0.75 })))
+      setSuggestions(json.suggestions ?? [])
+      setTimelineRisks(json.timeline_risks ?? [])
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -378,6 +387,54 @@ export function BotClient({ tasks, projectId }: Props) {
         </div>
       )}
 
+      {/* Suggestions */}
+      {suggestions.length > 0 && (
+        <div className="bg-white border border-amber-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-100 bg-amber-50/60">
+            <Lightbulb size={14} className="text-amber-500" />
+            <span className="text-sm font-semibold text-gray-900">Gợi ý hành động</span>
+            <span className="text-xs text-gray-400">({suggestions.length})</span>
+          </div>
+          <ul className="divide-y divide-amber-50">
+            {suggestions.map((s, i) => (
+              <li key={i} className="flex items-start gap-3 px-5 py-3">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-600 text-xs font-bold flex items-center justify-center mt-0.5">{i + 1}</span>
+                <p className="text-sm text-gray-700">{s}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Timeline Risks */}
+      {timelineRisks.length > 0 && (
+        <div className="bg-white border border-red-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-red-100 bg-red-50/60">
+            <Clock size={14} className="text-red-500" />
+            <span className="text-sm font-semibold text-gray-900">Cảnh báo Timeline</span>
+            <span className="text-xs text-gray-400">({timelineRisks.length})</span>
+          </div>
+          <ul className="divide-y divide-red-50">
+            {timelineRisks.map((r, i) => {
+              const sev = r.severity === 'high'
+                ? { bg: 'bg-red-100',    text: 'text-red-700',    label: 'Cao' }
+                : r.severity === 'medium'
+                ? { bg: 'bg-amber-100',  text: 'text-amber-700',  label: 'Vừa' }
+                : { bg: 'bg-gray-100',   text: 'text-gray-600',   label: 'Thấp' }
+              return (
+                <li key={i} className="flex items-start gap-3 px-5 py-3">
+                  <span className={`shrink-0 px-1.5 py-0.5 rounded text-xs font-semibold mt-0.5 ${sev.bg} ${sev.text}`}>{sev.label}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-500 mb-0.5">{r.sprint}</p>
+                    <p className="text-sm text-gray-800">{r.risk}</p>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
       {/* Applied confirmation */}
       {applied && (
         <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
@@ -388,7 +445,7 @@ export function BotClient({ tasks, projectId }: Props) {
               {selectedCount} task đã được cập nhật. Vào Sprint Board để kiểm tra.
             </p>
           </div>
-          <button onClick={() => { setApplied(false); setProposals([]); setUrl(''); resetFile() }}
+          <button onClick={() => { setApplied(false); setProposals([]); setSuggestions([]); setTimelineRisks([]); setUrl(''); resetFile() }}
             className="text-xs text-green-700 underline hover:no-underline">Phân tích tiếp</button>
         </div>
       )}
