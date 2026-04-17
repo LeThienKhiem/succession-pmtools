@@ -156,7 +156,7 @@ export default async function OverviewPage() {
 
       {/* Two-column: Documents (local) + Decisions (Supabase shared) */}
       <div className="grid grid-cols-2 gap-5">
-        <ProjectDocsPanel />
+        <ProjectDocsPanel projectId={project.id} />
         <DecisionsPanel projectId={project.id} initialDecisions={decisions} />
       </div>
 

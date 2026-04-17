@@ -198,6 +198,47 @@ export async function deleteTeamMember(id: string) {
   if (error) console.error('deleteTeamMember error:', error.message)
 }
 
+// ─── Knowledge Base ───────────────────────────────────────────────────────────
+
+export interface Knowledge {
+  id:         string
+  project_id: string
+  doc_name:   string
+  doc_type:   string
+  content:    string
+  file_size:  number
+  created_at: string
+}
+
+export async function getKnowledge(projectId: string): Promise<Knowledge[]> {
+  const { data, error } = await supabase
+    .from('pm_knowledge')
+    .select('id, project_id, doc_name, doc_type, file_size, created_at, content')
+    .eq('project_id', projectId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as Knowledge[]
+}
+
+export async function addKnowledge(k: Omit<Knowledge, 'id' | 'created_at'>): Promise<Knowledge> {
+  const { data, error } = await supabase
+    .from('pm_knowledge')
+    .insert({ ...k, is_active: true })
+    .select()
+    .single()
+  if (error) throw error
+  return data as Knowledge
+}
+
+export async function deleteKnowledge(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('pm_knowledge')
+    .update({ is_active: false })
+    .eq('id', id)
+  if (error) console.error('deleteKnowledge error:', error.message)
+}
+
 // ─── Decisions & Direction ────────────────────────────────────────────────────
 
 export interface Decision {

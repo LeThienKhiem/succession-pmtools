@@ -4,11 +4,11 @@ import { useState, useRef, useEffect, forwardRef } from 'react'
 import {
   Bot, ChevronDown, ChevronUp, Link2, Upload, FileText, Table2,
   CheckCircle2, AlertTriangle, RotateCcw, Check, X, Loader2,
-  Brain, BookOpen, Lightbulb, Clock, MessageSquare, Send, User,
+  Brain, Database, Lightbulb, Clock, MessageSquare, Send, User,
 } from 'lucide-react'
 import { DEFAULT_BRAIN } from '@/lib/default-brain'
-import { loadDocs, formatBytes, type ProjectDoc } from '@/lib/project-docs'
-import { updateTask, getDecisions, type Decision } from '@/lib/queries'
+import { formatBytes } from '@/lib/project-docs'
+import { updateTask, getDecisions, getKnowledge, type Decision, type Knowledge } from '@/lib/queries'
 import type { Task } from '@/lib/mock-data'
 import type { Proposal, TimelineRisk } from '@/app/api/bot/analyze/route'
 import type { ChatMessage } from '@/app/api/bot/chat/route'
@@ -63,18 +63,15 @@ function smartChunk(content: string, keywords: string[], maxChars: number): stri
   return intro + '\n\n[...]\n\n' + selected.map(c => c.text).join('')
 }
 
-// Build context string from selected docs (excluding primary doc being analyzed)
+// Build context string from all knowledge docs
 function buildDocContext(
-  docs: ProjectDoc[],
+  docs: { id: string; name: string; content: string }[],
   taskKeywords: string[],
   maxTotal: number,
-  excludeId?: string,
 ): string {
-  const ctx = docs.filter(d => d.id !== excludeId)
-  if (!ctx.length) return ''
-
-  const totalLen = ctx.reduce((s, d) => s + d.content.length, 0) || 1
-  return ctx.map(d => {
+  if (!docs.length) return ''
+  const totalLen = docs.reduce((s, d) => s + d.content.length, 0) || 1
+  return docs.map(d => {
     const perDoc = Math.max(3000, Math.min(20000, Math.floor(maxTotal * d.content.length / totalLen)))
     return `### ${d.name}\n${smartChunk(d.content, taskKeywords, perDoc)}`
   }).join('\n\n---\n\n')
@@ -90,7 +87,7 @@ interface Props {
 }
 
 type Tab      = 'doc' | 'report' | 'chat'
-type DocInput = 'url' | 'file' | 'project-doc'
+type DocInput = 'url' | 'file'
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -98,23 +95,21 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
   // ── Shared ──────────────────────────────────────────────────────────────────
   const [brain,        setBrain]       = useState(() => typeof window !== 'undefined' ? loadBrain() : DEFAULT_BRAIN)
   const [showBrain,    setShowBrain]   = useState(false)
-  const [projectDocs,  setProjectDocs] = useState<ProjectDoc[]>([])
   const [decisions,    setDecisions]   = useState<Decision[]>([])
   const [tab,          setTab]         = useState<Tab>('doc')
 
   // ── Analyze state ───────────────────────────────────────────────────────────
-  const [docInput,       setDocInput]      = useState<DocInput>('url')
-  const [url,            setUrl]           = useState('')
-  const [file,           setFile]          = useState<File | null>(null)
-  const [primaryDocId,   setPrimaryDocId]  = useState<string | null>(null)
-  const [includedDocIds, setIncludedDocIds] = useState<Set<string>>(new Set())
-  const [analyzing,      setAnalyzing]     = useState(false)
-  const [analyzeError,   setAnalyzeError]  = useState<string | null>(null)
-  const [proposals,      setProposals]     = useState<(Proposal & { selected: boolean })[]>([])
-  const [suggestions,    setSuggestions]   = useState<string[]>([])
-  const [timelineRisks,  setTimelineRisks] = useState<TimelineRisk[]>([])
-  const [applied,        setApplied]       = useState(false)
-  const [applying,       setApplying]      = useState(false)
+  const [docInput,      setDocInput]     = useState<DocInput>('url')
+  const [url,           setUrl]          = useState('')
+  const [file,          setFile]         = useState<File | null>(null)
+  const [knowledge,     setKnowledge]    = useState<Knowledge[]>([])
+  const [analyzing,     setAnalyzing]    = useState(false)
+  const [analyzeError,  setAnalyzeError] = useState<string | null>(null)
+  const [proposals,     setProposals]    = useState<(Proposal & { selected: boolean })[]>([])
+  const [suggestions,   setSuggestions]  = useState<string[]>([])
+  const [timelineRisks, setTimelineRisks] = useState<TimelineRisk[]>([])
+  const [applied,       setApplied]      = useState(false)
+  const [applying,      setApplying]     = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // ── Chat state ──────────────────────────────────────────────────────────────
@@ -125,10 +120,10 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
   const chatBottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const docs = loadDocs()
-    setProjectDocs(docs)
-    setIncludedDocIds(new Set(docs.map(d => d.id)))
-    if (projectId) getDecisions(projectId).then(setDecisions).catch(() => {})
+    if (projectId) {
+      getDecisions(projectId).then(setDecisions).catch(() => {})
+      getKnowledge(projectId).then(setKnowledge).catch(() => {})
+    }
     setChatMessages(loadChatHistory())
   }, [projectId])
 
@@ -146,11 +141,11 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
     setAnalyzing(true)
 
     try {
-      const taskKeywords = tasks.flatMap(t => t.title.split(/\s+/).filter(w => w.length > 3))
-      const selectedDocs = projectDocs.filter(d => includedDocIds.has(d.id))
-      const docContext   = buildDocContext(selectedDocs, taskKeywords, 50000, primaryDocId ?? undefined)
+      const taskKeywords  = tasks.flatMap(t => t.title.split(/\s+/).filter(w => w.length > 3))
+      const knowledgeDocs = knowledge.map(k => ({ id: k.id, name: k.doc_name, content: k.content }))
+      const docContext    = buildDocContext(knowledgeDocs, taskKeywords, 50000)
       const brainWithDocs = docContext
-        ? brain + '\n\n## Tài liệu dự án (ngữ cảnh)\n' + docContext
+        ? brain + '\n\n## Knowledge Base — Tài liệu dự án\n' + docContext
         : brain
 
       const fd = new FormData()
@@ -165,17 +160,10 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
           if (!url.trim()) { setAnalyzeError('Nhập URL Google Docs'); return }
           fd.append('type', 'doc-url')
           fd.append('url', url.trim())
-        } else if (docInput === 'file') {
+        } else {
           if (!file) { setAnalyzeError('Chọn file .docx'); return }
           fd.append('type', 'doc-file')
           fd.append('file', file)
-        } else {
-          // project-doc: use selected doc content directly
-          const doc = projectDocs.find(d => d.id === primaryDocId)
-          if (!doc) { setAnalyzeError('Chọn tài liệu để phân tích'); return }
-          fd.append('type', 'project-doc')
-          fd.append('doc_text', doc.content)
-          fd.append('doc_name', doc.name)
         }
       } else {
         if (!file) { setAnalyzeError('Chọn file Excel'); return }
@@ -216,7 +204,7 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
   function resetFile() { setFile(null); if (fileRef.current) fileRef.current.value = '' }
   function resetAnalyze() {
     setApplied(false); setProposals([]); setSuggestions([]); setTimelineRisks([])
-    setUrl(''); resetFile(); setPrimaryDocId(null)
+    setUrl(''); resetFile()
   }
 
   // ── Chat ─────────────────────────────────────────────────────────────────────
@@ -233,10 +221,11 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
     setChatLoading(true)
 
     try {
-      const taskKeywords = tasks.flatMap(t => t.title.split(/\s+/).filter(w => w.length > 3))
-      const docContext   = buildDocContext(projectDocs, taskKeywords, 30000)
+      const taskKeywords  = tasks.flatMap(t => t.title.split(/\s+/).filter(w => w.length > 3))
+      const knowledgeDocs = knowledge.map(k => ({ id: k.id, name: k.doc_name, content: k.content }))
+      const docContext    = buildDocContext(knowledgeDocs, taskKeywords, 30000)
       const brainWithDocs = docContext
-        ? brain + '\n\n## Tài liệu dự án\n' + docContext
+        ? brain + '\n\n## Knowledge Base — Tài liệu dự án\n' + docContext
         : brain
 
       const res  = await fetch('/api/bot/chat', {
@@ -324,37 +313,38 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
       {/* ── ANALYZE TABS ─────────────────────────────────────────────────────── */}
       {tab !== 'chat' && (
         <>
-          {/* Project Docs — context checkboxes */}
-          {projectDocs.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-                <BookOpen size={14} className="text-indigo-500" />
-                <span className="text-sm font-medium text-gray-700">Tài liệu dự án</span>
-                <span className="text-xs text-gray-400">— tick = đưa vào ngữ cảnh bot</span>
-              </div>
-              <ul className="divide-y divide-gray-50">
-                {projectDocs.map(doc => {
-                  const on = includedDocIds.has(doc.id)
-                  return (
-                    <li key={doc.id}
-                      onClick={() => setIncludedDocIds(prev => {
-                        const n = new Set(prev); on ? n.delete(doc.id) : n.add(doc.id); return n
-                      })}
-                      className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${on ? 'bg-indigo-50/40 hover:bg-indigo-50' : 'opacity-50 hover:bg-gray-50'}`}>
-                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${on ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'}`}>
-                        {on && <Check size={9} className="text-white" strokeWidth={3} />}
-                      </div>
-                      <span className="text-base shrink-0">
-                        {doc.name.endsWith('.pdf') ? '📕' : doc.name.endsWith('.docx') ? '📘' : '📝'}
-                      </span>
-                      <span className="flex-1 text-sm text-gray-700 truncate">{doc.name}</span>
-                      <span className="text-xs text-gray-400 shrink-0">{formatBytes(doc.size)}</span>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          )}
+          {/* Knowledge Base indicator */}
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border shadow-sm text-sm ${
+            knowledge.length > 0
+              ? 'bg-indigo-50 border-indigo-200'
+              : 'bg-gray-50 border-gray-200'
+          }`}>
+            <Database size={15} className={knowledge.length > 0 ? 'text-indigo-500' : 'text-gray-400'} />
+            {knowledge.length > 0 ? (
+              <>
+                <span className="font-medium text-indigo-800">
+                  Knowledge Base: {knowledge.length} tài liệu
+                </span>
+                <span className="text-indigo-500 text-xs">— bot tự dùng toàn bộ khi phân tích</span>
+                <div className="flex-1" />
+                <div className="flex items-center gap-1 flex-wrap justify-end">
+                  {knowledge.slice(0, 3).map(k => (
+                    <span key={k.id} className="text-xs bg-white text-indigo-600 border border-indigo-200 rounded px-1.5 py-0.5 truncate max-w-[120px]">
+                      {k.doc_name.replace(/\.[^.]+$/, '')}
+                    </span>
+                  ))}
+                  {knowledge.length > 3 && (
+                    <span className="text-xs text-indigo-400">+{knowledge.length - 3}</span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="text-gray-500">Chưa có tài liệu nào trong Knowledge Base</span>
+                <a href="/" className="text-xs text-indigo-500 hover:underline ml-auto">Upload tại Tổng quan →</a>
+              </>
+            )}
+          </div>
 
           {/* Input panel */}
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 space-y-4">
@@ -362,14 +352,13 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
             {tab === 'doc' && (
               <>
                 {/* Source toggle */}
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
                   {([
-                    { key: 'url',         label: 'Google Docs URL',         icon: Link2 },
-                    { key: 'file',        label: 'Upload .docx',            icon: Upload },
-                    { key: 'project-doc', label: 'Từ tài liệu đã upload',   icon: BookOpen },
+                    { key: 'url',  label: 'Google Docs URL', icon: Link2 },
+                    { key: 'file', label: 'Upload .docx',    icon: Upload },
                   ] as const).map(({ key, label, icon: Icon }) => (
                     <button key={key}
-                      onClick={() => { setDocInput(key); resetFile(); setPrimaryDocId(null); setAnalyzeError(null) }}
+                      onClick={() => { setDocInput(key); resetFile(); setAnalyzeError(null) }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                         docInput === key
                           ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
@@ -380,55 +369,17 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
                   ))}
                 </div>
 
-                {docInput === 'url' && (
+                {docInput === 'url' ? (
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">
                       Google Docs URL <span className="text-gray-400 font-normal">(share "Anyone with link can view")</span>
                     </label>
                     <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://docs.google.com/document/d/..." className={inputCls} />
                   </div>
-                )}
-
-                {docInput === 'file' && (
+                ) : (
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">File .docx</label>
                     <FileDropZone accept=".docx" file={file} onFile={setFile} onClear={resetFile} ref={fileRef} />
-                  </div>
-                )}
-
-                {docInput === 'project-doc' && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                      Chọn tài liệu để phân tích
-                      <span className="text-gray-400 font-normal ml-1">— các tài liệu còn lại vẫn là ngữ cảnh</span>
-                    </label>
-                    {projectDocs.length === 0 ? (
-                      <p className="text-sm text-gray-400 italic">Chưa có tài liệu nào. Upload tài liệu ở trang Tổng quan trước.</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {projectDocs.map(doc => {
-                          const selected = primaryDocId === doc.id
-                          return (
-                            <li key={doc.id}
-                              onClick={() => setPrimaryDocId(doc.id)}
-                              className={`flex items-center gap-3 px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${
-                                selected
-                                  ? 'border-indigo-500 bg-indigo-50'
-                                  : 'border-gray-200 hover:border-indigo-200 hover:bg-gray-50'
-                              }`}>
-                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-indigo-600' : 'border-gray-300'}`}>
-                                {selected && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
-                              </div>
-                              <span className="text-base shrink-0">
-                                {doc.name.endsWith('.pdf') ? '📕' : doc.name.endsWith('.docx') ? '📘' : '📝'}
-                              </span>
-                              <span className="flex-1 text-sm text-gray-700 truncate font-medium">{doc.name}</span>
-                              <span className="text-xs text-gray-400 shrink-0">{formatBytes(doc.size)}</span>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    )}
                   </div>
                 )}
               </>
