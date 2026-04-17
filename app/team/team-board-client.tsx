@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Users, Pencil, X, Check, CheckCircle2, Zap, Circle, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { updateTeamMember, addTeamMember, deleteTeamMember } from '@/lib/queries'
 import { TASK_TYPE_STYLES, STATUS_STYLES, type Task, type TeamMember } from '@/lib/mock-data'
@@ -17,15 +17,53 @@ const COLOR_PALETTE = [
   '#1ABC9C','#E91E63','#607D8B','#2C3E50',
 ]
 
+// ─── localStorage persistence ─────────────────────────────────────────────────
+
+interface TeamState {
+  deletedIds: string[]
+  added: TeamMember[]
+  edited: Record<string, Partial<Pick<TeamMember, 'name' | 'role'>>>
+}
+
+const LS_KEY = 'pm-team-state'
+
+function loadState(): TeamState {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    return raw ? JSON.parse(raw) : { deletedIds: [], added: [], edited: {} }
+  } catch { return { deletedIds: [], added: [], edited: {} } }
+}
+
+function saveState(s: TeamState) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(s)) } catch {}
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function TeamBoardClient({ initialMembers, tasks }: Props) {
   const [members, setMembers]   = useState<TeamMember[]>(initialMembers)
   const [selected, setSelected] = useState<TeamMember | null>(null)
   const [showAdd,  setShowAdd]  = useState(false)
 
+  // Restore deleted / added / edited from localStorage after hydration
+  useEffect(() => {
+    const s = loadState()
+    setMembers(prev => {
+      const base = prev
+        .filter(m => !s.deletedIds.includes(m.id))
+        .map(m => s.edited[m.id] ? { ...m, ...s.edited[m.id] } : m)
+      const extraAdded = s.added.filter(a => !base.find(m => m.id === a.id))
+      return [...base, ...extraAdded]
+    })
+  }, [])
+
   function handleUpdate(id: string, patch: Partial<Pick<TeamMember, 'name' | 'role'>>) {
     setMembers(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m))
     setSelected(prev => prev?.id === id ? { ...prev, ...patch } : prev)
     updateTeamMember(id, patch)
+    const s = loadState()
+    s.edited[id] = { ...(s.edited[id] ?? {}), ...patch }
+    saveState(s)
   }
 
   async function handleAdd(data: Omit<TeamMember, 'id'>) {
@@ -36,15 +74,25 @@ export function TeamBoardClient({ initialMembers, tasks }: Props) {
 
     const saved = await addTeamMember(data)
     if (saved) {
+      // Saved to DB with real UUID — replace temp
       setMembers(prev => prev.map(m => m.id === tempId ? saved : m))
+    } else {
+      // No Supabase — persist temp member to localStorage
+      const s = loadState()
+      s.added = [...s.added, tempMember]
+      saveState(s)
     }
-    // If no Supabase, tempMember stays (non-persistent but usable in session)
   }
 
   function handleDelete(id: string) {
     setMembers(prev => prev.filter(m => m.id !== id))
     setSelected(null)
     deleteTeamMember(id)
+    const s = loadState()
+    s.deletedIds = [...s.deletedIds.filter(x => x !== id), id]
+    s.added      = s.added.filter(m => m.id !== id)
+    delete s.edited[id]
+    saveState(s)
   }
 
   return (
