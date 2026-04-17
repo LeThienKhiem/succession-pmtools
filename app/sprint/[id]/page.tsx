@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getProject, getSprints, getSprint, getTasksBySprint, getEpicsBySprint, getTeamMembers } from '@/lib/queries'
@@ -72,7 +74,7 @@ export default async function SprintPage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Stats bar + board — all inside client so stats react to drag/edit */}
-      <SprintBoardClient tasks={tasks} epics={epics} members={members} />
+      <SprintBoardClient tasks={tasks} epics={epics} members={members} sprintId={id} />
     </div>
   )
 }

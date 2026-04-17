@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { TASK_TYPE_STYLES, STATUS_STYLES, computeStats, type Task } from '@/lib/mock-data'
 import { updateTask } from '@/lib/queries'
 import { AlertTriangle, CheckCircle2, Zap, Circle } from 'lucide-react'
@@ -13,6 +13,26 @@ interface Props {
   tasks: Task[]
   epics: Epic[]
   members: Member[]
+  sprintId: string
+}
+
+const lsKey = (id: string) => `pm-sprint-order-${id}`
+
+type OrderEntry = { status: Task['status']; sort_order: number }
+
+function loadOrder(sprintId: string): Record<string, OrderEntry> | null {
+  try {
+    const raw = localStorage.getItem(lsKey(sprintId))
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function saveOrder(sprintId: string, tasks: Task[]) {
+  try {
+    const map: Record<string, OrderEntry> = {}
+    tasks.forEach(t => { map[t.id] = { status: t.status, sort_order: t.sort_order ?? 0 } })
+    localStorage.setItem(lsKey(sprintId), JSON.stringify(map))
+  } catch {}
 }
 
 const COLUMNS: { status: Task['status']; label: string; dot: string }[] = [
@@ -22,9 +42,16 @@ const COLUMNS: { status: Task['status']; label: string; dot: string }[] = [
   { status: 'blocked',     label: 'Blocked',      dot: '#EF4444' },
 ]
 
-export function SprintBoardClient({ tasks: initialTasks, epics, members }: Props) {
+export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintId }: Props) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+
+  // Restore saved positions from localStorage after hydration
+  useEffect(() => {
+    const saved = loadOrder(sprintId)
+    if (!saved) return
+    setTasks(prev => prev.map(t => saved[t.id] ? { ...t, ...saved[t.id] } : t))
+  }, [sprintId])
 
   const [filterAssignee, setFilterAssignee] = useState('all')
   const [filterType,     setFilterType]     = useState('all')
@@ -44,7 +71,11 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members }: Props
   const taskEpicCodes = [...new Set(tasks.map(t => t.epic_code))]
 
   function handleUpdate(taskId: string, patch: Partial<Task>) {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...patch } : t))
+    setTasks(prev => {
+      const next = prev.map(t => t.id === taskId ? { ...t, ...patch } : t)
+      saveOrder(sprintId, next)
+      return next
+    })
     setSelectedTask(prev => prev?.id === taskId ? { ...prev, ...patch } : prev)
     updateTask(taskId, patch)
   }
@@ -86,10 +117,12 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members }: Props
         }
       })
 
-      return prev.map(t => {
+      const next = prev.map(t => {
         if (sortMap.has(t.id)) return { ...t, status: targetStatus, sort_order: sortMap.get(t.id) }
         return t
       })
+      saveOrder(sprintId, next)
+      return next
     })
   }
 
