@@ -36,13 +36,12 @@ export interface TeamMember {
 }
 
 export const TEAM_MEMBERS: TeamMember[] = [
-  { id: 'tm-01', code: 'lk',       name: 'Lê Khiêm',       role: 'Project Manager',   color: '#1D9E75' },
-  { id: 'tm-02', code: 'tl',       name: 'Tech Lead',       role: 'Tech Lead',         color: '#BA7517' },
-  { id: 'tm-03', code: 'ba1',      name: 'BA1',             role: 'Business Analyst',  color: '#378ADD' },
-  { id: 'tm-04', code: 'ba2',      name: 'BA2',             role: 'Business Analyst',  color: '#639922' },
-  { id: 'tm-05', code: 'ds',       name: 'Designer Senior', role: 'Designer',          color: '#7F77DD' },
-  { id: 'tm-06', code: 'dj',       name: 'Designer Junior', role: 'Designer',          color: '#9B59B6' },
-  { id: 'tm-07', code: 'lead_dev', name: 'Lead Dev + Team', role: 'Developer',         color: '#D85A30' },
+  { id: 'tm-01', code: 'lk',  name: 'Lê Khiêm',       role: 'Project Manager',  color: '#1D9E75' },
+  { id: 'tm-02', code: 'tl',  name: 'Tech Lead',       role: 'Tech Lead',        color: '#BA7517' },
+  { id: 'tm-03', code: 'ba1', name: 'BA1',             role: 'Business Analyst', color: '#378ADD' },
+  { id: 'tm-04', code: 'ba2', name: 'BA2',             role: 'Business Analyst', color: '#639922' },
+  { id: 'tm-05', code: 'ds',  name: 'Designer Senior', role: 'Designer',         color: '#7F77DD' },
+  { id: 'tm-06', code: 'dj',  name: 'Designer Junior', role: 'Designer',         color: '#9B59B6' },
 ]
 
 // E01-E08 per tasks-export-v3.json

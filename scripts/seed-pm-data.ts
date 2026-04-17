@@ -56,13 +56,12 @@ async function main() {
   // 1. TEAM MEMBERS ──────────────────────────────────────────────────────────
   console.log('👥 Team members...')
   const members = await upsert('pm_team_members', [
-    { code: 'lk',       name: 'Lê Khiêm',       role: 'Project Manager',  color: '#1D9E75' },
-    { code: 'tl',       name: 'Tech Lead',        role: 'Tech Lead',        color: '#BA7517' },
-    { code: 'ba1',      name: 'BA1',              role: 'Business Analyst', color: '#378ADD' },
-    { code: 'ba2',      name: 'BA2',              role: 'Business Analyst', color: '#639922' },
-    { code: 'ds',       name: 'Designer Senior',  role: 'Designer',         color: '#7F77DD' },
-    { code: 'dj',       name: 'Designer Junior',  role: 'Designer',         color: '#9B59B6' },
-    { code: 'lead_dev', name: 'Lead Dev + Team',  role: 'Developer',        color: '#D85A30' },
+    { code: 'lk',  name: 'Lê Khiêm',       role: 'Project Manager',  color: '#1D9E75' },
+    { code: 'tl',  name: 'Tech Lead',        role: 'Tech Lead',        color: '#BA7517' },
+    { code: 'ba1', name: 'BA1',              role: 'Business Analyst', color: '#378ADD' },
+    { code: 'ba2', name: 'BA2',              role: 'Business Analyst', color: '#639922' },
+    { code: 'ds',  name: 'Designer Senior',  role: 'Designer',         color: '#7F77DD' },
+    { code: 'dj',  name: 'Designer Junior',  role: 'Designer',         color: '#9B59B6' },
   ], 'code')
   const M: Record<string, string> = Object.fromEntries(members.map((m: any) => [m.code, m.id]))
   console.log(`   ✓ ${members.length} members`)
@@ -249,7 +248,7 @@ async function main() {
   console.log(`   ✓ ${inserted.length} tasks`)
 
   console.log('\n✅ Seed complete!')
-  console.log(`   80 tasks across 5 sprints, 8 epics, 7 members`)
+  console.log(`   80 tasks across 5 sprints, 8 epics, 6 members`)
 }
 
 main().catch(err => { console.error('💥', err); process.exit(1) })
