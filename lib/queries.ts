@@ -168,6 +168,7 @@ export async function updateTask(id: string, patch: Partial<Task>) {
   if (patch.estimated_hours !== undefined) dbPatch.estimated_hours = patch.estimated_hours ?? null
   if (patch.documents       !== undefined) dbPatch.documents       = patch.documents ?? null
   if (patch.assignee_id     !== undefined) dbPatch.assignee_id     = patch.assignee_id ?? null
+  if (patch.epic_id         !== undefined) dbPatch.epic_id         = patch.epic_id ?? null
   if (patch.day_label       !== undefined) dbPatch.day_label       = patch.day_label
   if (patch.sort_order      !== undefined) dbPatch.sort_order      = patch.sort_order
 

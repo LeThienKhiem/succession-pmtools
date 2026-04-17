@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { TASK_TYPE_STYLES, STATUS_STYLES, computeStats, type Task } from '@/lib/mock-data'
+import { TASK_TYPE_STYLES, STATUS_STYLES, computeStats, type Task, type TaskType } from '@/lib/mock-data'
 import { updateTask } from '@/lib/queries'
-import { AlertTriangle, CheckCircle2, Zap, Circle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Zap, Circle, Plus, X, Check, Archive } from 'lucide-react'
 import { TaskDetailModal } from '@/components/task-detail-modal'
 
 interface Epic   { id: string; code: string; name: string; color: string }
@@ -16,17 +16,17 @@ interface Props {
   sprintId: string
 }
 
-const lsKey = (id: string) => `pm-sprint-order-${id}`
+// ─── LocalStorage helpers ─────────────────────────────────────────────────────
+
+const lsKey         = (id: string) => `pm-sprint-order-${id}`
+const lsNewTasksKey = (id: string) => `pm-sprint-newtasks-${id}`
 
 type OrderEntry = { status: Task['status']; sort_order: number }
 
 function loadOrder(sprintId: string): Record<string, OrderEntry> | null {
-  try {
-    const raw = localStorage.getItem(lsKey(sprintId))
-    return raw ? JSON.parse(raw) : null
-  } catch { return null }
+  try { const r = localStorage.getItem(lsKey(sprintId)); return r ? JSON.parse(r) : null }
+  catch { return null }
 }
-
 function saveOrder(sprintId: string, tasks: Task[]) {
   try {
     const map: Record<string, OrderEntry> = {}
@@ -34,23 +34,51 @@ function saveOrder(sprintId: string, tasks: Task[]) {
     localStorage.setItem(lsKey(sprintId), JSON.stringify(map))
   } catch {}
 }
+function loadNewTasks(sprintId: string): Task[] {
+  try { const r = localStorage.getItem(lsNewTasksKey(sprintId)); return r ? JSON.parse(r) : [] }
+  catch { return [] }
+}
+function persistNewTask(sprintId: string, task: Task) {
+  const all = loadNewTasks(sprintId)
+  const idx = all.findIndex(t => t.id === task.id)
+  idx >= 0 ? all.splice(idx, 1, task) : all.push(task)
+  try { localStorage.setItem(lsNewTasksKey(sprintId), JSON.stringify(all)) } catch {}
+}
+function removeNewTask(sprintId: string, taskId: string) {
+  const all = loadNewTasks(sprintId).filter(t => t.id !== taskId)
+  try { localStorage.setItem(lsNewTasksKey(sprintId), JSON.stringify(all)) } catch {}
+}
 
-const COLUMNS: { status: Task['status']; label: string; dot: string }[] = [
+// ─── Columns ──────────────────────────────────────────────────────────────────
+
+const COLUMNS: { status: Task['status']; label: string; dot: string; isArchive?: boolean }[] = [
   { status: 'todo',        label: 'Todo',        dot: '#9CA3AF' },
-  { status: 'in-progress', label: 'In Progress',  dot: '#3B82F6' },
-  { status: 'done',        label: 'Done',         dot: '#22C55E' },
-  { status: 'blocked',     label: 'Blocked',      dot: '#EF4444' },
+  { status: 'in-progress', label: 'In Progress', dot: '#3B82F6' },
+  { status: 'done',        label: 'Done',        dot: '#22C55E' },
+  { status: 'blocked',     label: 'Blocked',     dot: '#EF4444' },
+  { status: 'outline',     label: 'Archive',     dot: '#D1D5DB', isArchive: true },
 ]
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// ─── SprintBoardClient ────────────────────────────────────────────────────────
+
 export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintId }: Props) {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks)
+  const [tasks,        setTasks]        = useState<Task[]>(initialTasks)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
 
-  // Restore saved positions from localStorage after hydration
+  // Restore saved positions + locally-created tasks
   useEffect(() => {
-    const saved = loadOrder(sprintId)
-    if (!saved) return
-    setTasks(prev => prev.map(t => saved[t.id] ? { ...t, ...saved[t.id] } : t))
+    const saved    = loadOrder(sprintId)
+    const newTasks = loadNewTasks(sprintId)
+    setTasks(prev => {
+      const existingIds = new Set(prev.map(t => t.id))
+      let result = [...prev, ...newTasks.filter(t => !existingIds.has(t.id))]
+      if (saved) result = result.map(t => saved[t.id] ? { ...t, ...saved[t.id] } : t)
+      return result
+    })
   }, [sprintId])
 
   const [filterAssignee, setFilterAssignee] = useState('all')
@@ -58,6 +86,10 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
   const [filterEpic,     setFilterEpic]     = useState('all')
   const [filterPriority, setFilterPriority] = useState('all')
   const [viewMode,       setViewMode]       = useState<'board' | 'list'>('board')
+
+  // Exclude archived tasks from stats
+  const activeTasks = useMemo(() => tasks.filter(t => t.status !== 'outline'), [tasks])
+  const stats       = useMemo(() => computeStats(activeTasks), [activeTasks])
 
   const filtered = useMemo(() => tasks.filter(t => {
     if (filterAssignee !== 'all' && t.assignee_code !== filterAssignee) return false
@@ -67,63 +99,95 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
     return true
   }), [tasks, filterAssignee, filterType, filterEpic, filterPriority])
 
-  const stats = useMemo(() => computeStats(tasks), [tasks])
-  const taskEpicCodes = [...new Set(tasks.map(t => t.epic_code))]
+  const taskEpicCodes = [...new Set(tasks.filter(t => t.status !== 'outline').map(t => t.epic_code))]
 
   function handleUpdate(taskId: string, patch: Partial<Task>) {
-    setTasks(prev => {
-      const next = prev.map(t => t.id === taskId ? { ...t, ...patch } : t)
-      saveOrder(sprintId, next)
-      return next
-    })
+    const next = tasks.map(t => t.id === taskId ? { ...t, ...patch } : t)
+    setTasks(next)
     setSelectedTask(prev => prev?.id === taskId ? { ...prev, ...patch } : prev)
+    saveOrder(sprintId, next)
+    if (!UUID_RE.test(taskId)) {
+      const updated = next.find(t => t.id === taskId)
+      if (updated) persistNewTask(sprintId, updated)
+    }
     updateTask(taskId, patch)
   }
 
-  /** Called by BoardView when a card is dropped onto a column/zone */
   function handleBoardDrop(
     draggedId: string,
     targetStatus: Task['status'],
     insertBeforeId: string | null,
   ) {
-    setTasks(prev => {
-      const dragged = prev.find(t => t.id === draggedId)
-      if (!dragged) return prev
+    const dragged = tasks.find(t => t.id === draggedId)
+    if (!dragged) return
 
-      // New ordered list for the target column (excluding the dragged card)
-      const colTasks = prev
-        .filter(t => t.status === targetStatus && t.id !== draggedId)
-        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    const colTasks = tasks
+      .filter(t => t.status === targetStatus && t.id !== draggedId)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
 
-      const draggedNew: Task = { ...dragged, status: targetStatus }
+    const draggedNew: Task = { ...dragged, status: targetStatus }
 
-      if (insertBeforeId) {
-        const idx = colTasks.findIndex(t => t.id === insertBeforeId)
-        colTasks.splice(idx >= 0 ? idx : colTasks.length, 0, draggedNew)
-      } else {
-        colTasks.push(draggedNew)
+    if (insertBeforeId) {
+      const idx = colTasks.findIndex(t => t.id === insertBeforeId)
+      colTasks.splice(idx >= 0 ? idx : colTasks.length, 0, draggedNew)
+    } else {
+      colTasks.push(draggedNew)
+    }
+
+    const sortMap = new Map<string, number>()
+    colTasks.forEach((t, i) => sortMap.set(t.id, (i + 1) * 10))
+
+    // DB + localStorage sync — outside state updater so no double-call in StrictMode
+    colTasks.forEach((t, i) => {
+      const newOrder = (i + 1) * 10
+      if (t.id === draggedId) {
+        updateTask(t.id, { status: targetStatus, sort_order: newOrder })
+      } else if ((t.sort_order ?? 0) !== newOrder) {
+        updateTask(t.id, { sort_order: newOrder })
       }
-
-      // Assign contiguous sort_order and persist changes
-      const sortMap = new Map<string, number>()
-      colTasks.forEach((t, i) => sortMap.set(t.id, (i + 1) * 10))
-
-      colTasks.forEach((t, i) => {
-        const newOrder = (i + 1) * 10
-        if (t.id === draggedId) {
-          updateTask(t.id, { status: targetStatus, sort_order: newOrder })
-        } else if ((t.sort_order ?? 0) !== newOrder) {
-          updateTask(t.id, { sort_order: newOrder })
-        }
-      })
-
-      const next = prev.map(t => {
-        if (sortMap.has(t.id)) return { ...t, status: targetStatus, sort_order: sortMap.get(t.id) }
-        return t
-      })
-      saveOrder(sprintId, next)
-      return next
     })
+
+    const next = tasks.map(t =>
+      sortMap.has(t.id)
+        ? { ...t, status: targetStatus, sort_order: sortMap.get(t.id)! }
+        : t
+    )
+    setTasks(next)
+    saveOrder(sprintId, next)
+
+    // Persist full task data for locally-created tasks that were moved
+    if (!UUID_RE.test(draggedId)) {
+      const updated = next.find(t => t.id === draggedId)
+      if (updated) persistNewTask(sprintId, updated)
+    }
+  }
+
+  function handleAddTask(
+    title: string,
+    type: TaskType,
+    assigneeCode: string,
+    status: Task['status'],
+  ) {
+    const id      = `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    const epic    = epics[0]?.code ?? ''
+    const task: Task = {
+      id,
+      sprint_id:     sprintId,
+      epic_id:       epics[0]?.id ?? '',
+      epic_code:     epic,
+      title:         title.trim(),
+      assignee_id:   members.find(m => m.code === assigneeCode)?.id ?? '',
+      assignee_code: assigneeCode,
+      day_label:     '',
+      type,
+      status,
+      priority:      'normal',
+      sort_order:    Date.now(),
+    }
+    const next = [...tasks, task]
+    setTasks(next)
+    saveOrder(sprintId, next)
+    persistNewTask(sprintId, task)
   }
 
   const selectCls = 'text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer'
@@ -161,6 +225,16 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
             <span className="text-gray-400">Critical:</span>
             <span className="font-semibold text-red-600">{stats.critical}</span>
           </div>
+          {tasks.filter(t => t.status === 'outline').length > 0 && (
+            <>
+              <div className="w-px h-4 bg-gray-200" />
+              <div className="flex items-center gap-1.5 text-sm">
+                <Archive size={13} className="text-gray-400" />
+                <span className="font-semibold text-gray-500">{tasks.filter(t => t.status === 'outline').length}</span>
+                <span className="text-gray-400">archived</span>
+              </div>
+            </>
+          )}
           <div className="flex-1" />
           <div className="flex items-center gap-2">
             <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -201,18 +275,17 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
             <option value="normal">Normal</option>
           </select>
 
-          <span className="text-xs text-gray-400 ml-1">{filtered.length} tasks</span>
+          <span className="text-xs text-gray-400 ml-1">
+            {filtered.filter(t => t.status !== 'outline').length} tasks
+          </span>
           <div className="flex-1" />
 
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
             {(['board','list'] as const).map(v => (
-              <button
-                key={v}
-                onClick={() => setViewMode(v)}
+              <button key={v} onClick={() => setViewMode(v)}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
                   viewMode === v ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
+                }`}>
                 {v === 'board' ? 'Kanban' : 'List'}
               </button>
             ))}
@@ -223,15 +296,13 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
           <BoardView
             tasks={filtered}
             members={members}
+            epics={epics}
             onTaskClick={setSelectedTask}
             onDrop={handleBoardDrop}
+            onAddTask={handleAddTask}
           />
         ) : (
-          <ListView
-            tasks={filtered}
-            members={members}
-            onTaskClick={setSelectedTask}
-          />
+          <ListView tasks={filtered} members={members} onTaskClick={setSelectedTask} />
         )}
       </div>
 
@@ -248,45 +319,40 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
   )
 }
 
-// ─── Member Avatar ───────────────────────────────────────────────────────────
+// ─── Member Avatar ─────────────────────────────────────────────────────────────
 
 function MemberAvatar({ code, members, size = 20 }: { code: string; members: Member[]; size?: number }) {
   const m = members.find(x => x.code === code)
   if (!m) return null
   return (
-    <div
-      title={`${m.name} (${m.role})`}
+    <div title={`${m.name} (${m.role})`}
       className="rounded-full flex items-center justify-center text-white font-bold shrink-0 select-none"
-      style={{ width: size, height: size, backgroundColor: m.color, fontSize: size * 0.38 }}
-    >
+      style={{ width: size, height: size, backgroundColor: m.color, fontSize: size * 0.38 }}>
       {m.code.toUpperCase().slice(0, 2)}
     </div>
   )
 }
 
-// ─── Task Card ───────────────────────────────────────────────────────────────
+// ─── Task Card ────────────────────────────────────────────────────────────────
 
 function TaskCard({
-  task, members, onTaskClick, onDragStart, onDragEnd, onDragOver, onDrop, dropIndicator,
+  task, members, onTaskClick, onDragStart, onDragEnd, onDragOver, onDrop, dropIndicator, muted,
 }: {
-  task: Task
-  members: Member[]
+  task: Task; members: Member[]
   onTaskClick: (t: Task) => void
   onDragStart: (e: React.DragEvent, t: Task) => void
   onDragEnd: () => void
   onDragOver: (e: React.DragEvent, taskId: string) => void
   onDrop: (e: React.DragEvent, taskId: string) => void
   dropIndicator: 'top' | 'bottom' | null
+  muted?: boolean
 }) {
   const typeStyle = TASK_TYPE_STYLES[task.type]
-
   return (
     <div className="relative">
-      {/* Top insert line */}
       {dropIndicator === 'top' && (
         <div className="absolute -top-px inset-x-0 h-0.5 bg-indigo-400 rounded-full z-10 pointer-events-none" />
       )}
-
       <div
         draggable
         onDragStart={e => onDragStart(e, task)}
@@ -295,23 +361,19 @@ function TaskCard({
         onDrop={e => onDrop(e, task.id)}
         onClick={() => onTaskClick(task)}
         className={`bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing active:opacity-50 active:scale-[0.98] group select-none ${
-          dropIndicator ? 'border-indigo-200' : 'border-gray-200 hover:border-indigo-200'
-        }`}
+          muted ? 'opacity-50 hover:opacity-80' : ''
+        } ${dropIndicator ? 'border-indigo-200' : 'border-gray-200 hover:border-indigo-200'}`}
       >
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold text-gray-400">{task.epic_code}</span>
-          <span
-            className="px-1.5 py-0.5 rounded text-xs font-medium"
-            style={{ backgroundColor: typeStyle.bg, color: typeStyle.text }}
-          >
+          <span className="px-1.5 py-0.5 rounded text-xs font-medium"
+            style={{ backgroundColor: typeStyle.bg, color: typeStyle.text }}>
             {typeStyle.label}
           </span>
         </div>
-
         <p className="text-sm text-gray-800 leading-snug mb-2.5 group-hover:text-gray-900 line-clamp-3">
           {task.title}
         </p>
-
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <MemberAvatar code={task.assignee_code} members={members} size={20} />
@@ -320,14 +382,10 @@ function TaskCard({
           <div className="flex items-center gap-1.5">
             {task.priority === 'critical' && <AlertTriangle size={12} className="text-red-500" />}
             {task.priority === 'priority' && <AlertTriangle size={12} className="text-orange-400" />}
-            {task.estimated_hours && (
-              <span className="text-xs text-gray-400">{task.estimated_hours}h</span>
-            )}
+            {task.estimated_hours && <span className="text-xs text-gray-400">{task.estimated_hours}h</span>}
           </div>
         </div>
       </div>
-
-      {/* Bottom insert line */}
       {dropIndicator === 'bottom' && (
         <div className="absolute -bottom-px inset-x-0 h-0.5 bg-indigo-400 rounded-full z-10 pointer-events-none" />
       )}
@@ -335,25 +393,39 @@ function TaskCard({
   )
 }
 
-// ─── Board (Kanban) View ─────────────────────────────────────────────────────
+// ─── Board (Kanban) View ──────────────────────────────────────────────────────
 
 function BoardView({
-  tasks, members, onTaskClick, onDrop,
+  tasks, members, epics, onTaskClick, onDrop, onAddTask,
 }: {
   tasks: Task[]
   members: Member[]
+  epics: Epic[]
   onTaskClick: (t: Task) => void
   onDrop: (draggedId: string, targetStatus: Task['status'], insertBeforeId: string | null) => void
+  onAddTask: (title: string, type: TaskType, assigneeCode: string, status: Task['status']) => void
 }) {
   const draggingRef = useRef<string | null>(null)
   const [dragOverCol,    setDragOverCol]    = useState<Task['status'] | null>(null)
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null)
   const [dragOverPos,    setDragOverPos]    = useState<'top' | 'bottom'>('bottom')
 
+  // Add card form state
+  const [addingToCol,  setAddingToCol]  = useState<Task['status'] | null>(null)
+  const [newTitle,     setNewTitle]     = useState('')
+  const [newType,      setNewType]      = useState<TaskType>('story')
+  const [newAssignee,  setNewAssignee]  = useState(members[0]?.code ?? '')
+  const addInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (addingToCol) {
+      setNewAssignee(members[0]?.code ?? '')
+      setTimeout(() => addInputRef.current?.focus(), 50)
+    }
+  }, [addingToCol, members])
+
   function clearDrag() {
-    draggingRef.current = null
-    setDragOverCol(null)
-    setDragOverCardId(null)
+    draggingRef.current = null; setDragOverCol(null); setDragOverCardId(null)
   }
 
   function handleDragStart(e: React.DragEvent, task: Task) {
@@ -363,79 +435,148 @@ function BoardView({
   }
 
   function handleCardDragOver(e: React.DragEvent, taskId: string) {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault(); e.stopPropagation()
     e.dataTransfer.dropEffect = 'move'
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const pos: 'top' | 'bottom' = e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom'
-    setDragOverCardId(taskId)
-    setDragOverPos(pos)
+    setDragOverCardId(taskId); setDragOverPos(pos)
   }
 
   function handleCardDrop(e: React.DragEvent, targetTask: Task, colTasks: Task[]) {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault(); e.stopPropagation()
     const id = draggingRef.current ?? e.dataTransfer.getData('text/plain')
     if (!id || id === targetTask.id) { clearDrag(); return }
-
     const idx = colTasks.findIndex(t => t.id === targetTask.id)
-    let insertBeforeId: string | null
-    if (dragOverPos === 'top') {
-      insertBeforeId = targetTask.id
-    } else {
-      insertBeforeId = idx < colTasks.length - 1 ? colTasks[idx + 1].id : null
-    }
-
+    const insertBeforeId = dragOverPos === 'top'
+      ? targetTask.id
+      : idx < colTasks.length - 1 ? colTasks[idx + 1].id : null
     onDrop(id, targetTask.status, insertBeforeId)
     clearDrag()
   }
 
   function handleColDrop(e: React.DragEvent, status: Task['status']) {
     e.preventDefault()
-    // Only fire if not already handled by a card
     if (dragOverCardId) { clearDrag(); return }
     const id = draggingRef.current ?? e.dataTransfer.getData('text/plain')
     if (id) onDrop(id, status, null)
     clearDrag()
   }
 
+  function confirmAdd() {
+    if (!newTitle.trim() || !addingToCol) return
+    onAddTask(newTitle.trim(), newType, newAssignee || members[0]?.code, addingToCol)
+    setAddingToCol(null); setNewTitle(''); setNewType('story')
+  }
+
   return (
-    <div className="grid grid-cols-4 gap-4 items-start">
+    <div className="flex gap-4 items-start overflow-x-auto pb-2">
       {COLUMNS.map(col => {
         const colTasks = tasks
           .filter(t => t.status === col.status)
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-        const isOver = dragOverCol === col.status && !dragOverCardId
+        const isOver    = dragOverCol === col.status && !dragOverCardId
+        const isAdding  = addingToCol === col.status
 
         return (
-          <div
-            key={col.status}
+          <div key={col.status}
             onDragEnter={e => { e.preventDefault(); setDragOverCol(col.status) }}
             onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
             onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDrag() }}
             onDrop={e => handleColDrop(e, col.status)}
-            className={`rounded-xl border overflow-hidden transition-colors ${
-              isOver ? 'border-indigo-400 bg-indigo-50 shadow-md' : 'border-gray-200 bg-gray-50'
+            className={`rounded-xl border overflow-hidden transition-colors flex-shrink-0 ${
+              col.isArchive ? 'w-52' : 'w-64'
+            } ${isOver
+              ? 'border-indigo-400 bg-indigo-50 shadow-md'
+              : col.isArchive
+              ? 'border-dashed border-gray-300 bg-gray-50/50'
+              : 'border-gray-200 bg-gray-50'
             }`}
           >
             {/* Column header */}
-            <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200 bg-white">
+            <div className={`flex items-center justify-between px-3 py-2.5 border-b ${
+              col.isArchive ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'
+            }`}>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: col.dot }} />
-                <span className="text-sm font-semibold text-gray-700">{col.label}</span>
+                {col.isArchive
+                  ? <Archive size={13} className="text-gray-400" />
+                  : <div className="w-2 h-2 rounded-full" style={{ backgroundColor: col.dot }} />
+                }
+                <span className={`text-sm font-semibold ${col.isArchive ? 'text-gray-400' : 'text-gray-700'}`}>
+                  {col.label}
+                </span>
               </div>
-              <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
-                {colTasks.length}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                  {colTasks.length}
+                </span>
+                {!col.isArchive && (
+                  <button
+                    onClick={() => setAddingToCol(isAdding ? null : col.status)}
+                    className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
+                      isAdding
+                        ? 'bg-indigo-100 text-indigo-600'
+                        : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'
+                    }`}
+                    title="Thêm task"
+                  >
+                    {isAdding ? <X size={13} /> : <Plus size={13} />}
+                  </button>
+                )}
+              </div>
             </div>
 
+            {/* Quick-add form */}
+            {isAdding && (
+              <div className="px-2 pt-2 pb-1 bg-indigo-50/60 border-b border-indigo-100 space-y-1.5">
+                <input
+                  ref={addInputRef}
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') confirmAdd()
+                    if (e.key === 'Escape') { setAddingToCol(null); setNewTitle('') }
+                  }}
+                  placeholder="Tiêu đề task..."
+                  className="w-full text-sm border border-indigo-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                />
+                <div className="flex gap-1.5">
+                  <select value={newType} onChange={e => setNewType(e.target.value as TaskType)}
+                    className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400">
+                    {(['spec','story','design','dev','test','review','doc'] as const).map(t => (
+                      <option key={t} value={t}>{TASK_TYPE_STYLES[t].label}</option>
+                    ))}
+                  </select>
+                  <select value={newAssignee} onChange={e => setNewAssignee(e.target.value)}
+                    className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400">
+                    {members.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div className="flex gap-1.5 pb-0.5">
+                  <button onClick={() => { setAddingToCol(null); setNewTitle('') }}
+                    className="flex-1 py-1 rounded-lg border border-gray-200 text-xs text-gray-500 hover:bg-gray-100 transition-colors">
+                    Hủy
+                  </button>
+                  <button onClick={confirmAdd} disabled={!newTitle.trim()}
+                    className="flex-1 py-1 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors flex items-center justify-center gap-1">
+                    <Check size={11} /> Thêm
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Cards */}
-            <div className={`p-2 space-y-2 min-h-[120px] transition-colors ${isOver ? 'bg-indigo-50' : ''}`}>
+            <div className={`p-2 space-y-2 min-h-[80px] transition-colors ${isOver ? 'bg-indigo-50' : ''}`}>
               {colTasks.length === 0 ? (
-                <div className={`flex items-center justify-center h-20 rounded-lg border-2 border-dashed transition-colors ${
-                  isOver ? 'border-indigo-300 text-indigo-400' : 'border-gray-200 text-gray-400'
+                <div className={`flex items-center justify-center h-16 rounded-lg border-2 border-dashed transition-colors ${
+                  isOver
+                    ? 'border-indigo-300 text-indigo-400'
+                    : col.isArchive
+                    ? 'border-gray-200 text-gray-300'
+                    : 'border-gray-200 text-gray-400'
                 }`}>
-                  <span className="text-xs">{isOver ? 'Thả vào đây' : 'Trống'}</span>
+                  <span className="text-xs">
+                    {isOver ? 'Thả vào đây' : col.isArchive ? 'Kéo task vào đây để archive' : 'Trống'}
+                  </span>
                 </div>
               ) : (
                 colTasks.map(t => {
@@ -445,6 +586,7 @@ function BoardView({
                       key={t.id}
                       task={t}
                       members={members}
+                      muted={col.isArchive}
                       onTaskClick={onTaskClick}
                       onDragStart={handleDragStart}
                       onDragEnd={clearDrag}
@@ -466,16 +608,15 @@ function BoardView({
   )
 }
 
-// ─── List View ───────────────────────────────────────────────────────────────
+// ─── List View ────────────────────────────────────────────────────────────────
 
 function ListView({ tasks, members, onTaskClick }: {
-  tasks: Task[]
-  members: Member[]
-  onTaskClick: (t: Task) => void
+  tasks: Task[]; members: Member[]; onTaskClick: (t: Task) => void
 }) {
-  const byDay = tasks.reduce<Record<string, Task[]>>((acc, t) => {
-    ;(acc[t.day_label] ??= []).push(t)
-    return acc
+  // Exclude archived from list view
+  const visible = tasks.filter(t => t.status !== 'outline')
+  const byDay   = visible.reduce<Record<string, Task[]>>((acc, t) => {
+    ;(acc[t.day_label] ??= []).push(t); return acc
   }, {})
 
   return (
@@ -491,29 +632,22 @@ function ListView({ tasks, members, onTaskClick }: {
               const typeStyle   = TASK_TYPE_STYLES[t.type]
               const statusStyle = STATUS_STYLES[t.status]
               return (
-                <div
-                  key={t.id}
-                  onClick={() => onTaskClick(t)}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
-                >
+                <div key={t.id} onClick={() => onTaskClick(t)}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
                   <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: statusStyle.dot }} />
                   <p className="flex-1 text-sm text-gray-800 min-w-0 truncate">{t.title}</p>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs font-medium text-gray-400">{t.epic_code}</span>
-                    <span
-                      className="px-1.5 py-0.5 rounded text-xs font-medium"
-                      style={{ backgroundColor: typeStyle.bg, color: typeStyle.text }}
-                    >
+                    <span className="px-1.5 py-0.5 rounded text-xs font-medium"
+                      style={{ backgroundColor: typeStyle.bg, color: typeStyle.text }}>
                       {typeStyle.label}
                     </span>
-                    <span
-                      className="px-1.5 py-0.5 rounded text-xs font-medium"
-                      style={{ backgroundColor: statusStyle.bg, color: statusStyle.text }}
-                    >
+                    <span className="px-1.5 py-0.5 rounded text-xs font-medium"
+                      style={{ backgroundColor: statusStyle.bg, color: statusStyle.text }}>
                       {statusStyle.label}
                     </span>
                     {t.priority === 'critical' && <span className="text-xs">🔴</span>}
-                    {t.priority === 'priority' && <span className="text-xs">🟠</span>}
+                    {t.priority === 'priority'  && <span className="text-xs">🟠</span>}
                     <MemberAvatar code={t.assignee_code} members={members} size={22} />
                     {t.estimated_hours && (
                       <span className="text-xs text-gray-400 w-8 text-right">{t.estimated_hours}h</span>

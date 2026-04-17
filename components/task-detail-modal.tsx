@@ -95,13 +95,15 @@ export function TaskDetailModal({ task, members, epics, onClose, onUpdate }: Pro
   }
 
   function handleAssigneeChange(code: string) {
+    const m = members.find(x => x.code === code)
     setAssigneeCode(code)
-    onUpdate(task.id, { assignee_code: code })
+    onUpdate(task.id, { assignee_code: code, assignee_id: m?.id })
   }
 
   function handleEpicChange(code: string) {
+    const e = epics.find(x => x.code === code)
     setEpicCode(code)
-    onUpdate(task.id, { epic_code: code })
+    onUpdate(task.id, { epic_code: code, epic_id: e?.id })
   }
 
   function commitDay() {
