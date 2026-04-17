@@ -5,7 +5,6 @@ import { TASK_TYPE_STYLES, STATUS_STYLES, computeStats, type Task } from '@/lib/
 import { updateTask } from '@/lib/queries'
 import { AlertTriangle, CheckCircle2, Zap, Circle } from 'lucide-react'
 import { TaskDetailModal } from '@/components/task-detail-modal'
-import type { Task as TaskType } from '@/lib/mock-data'
 
 interface Epic   { id: string; code: string; name: string; color: string }
 interface Member { id: string; code: string; name: string; color: string; role: string }
@@ -24,7 +23,6 @@ const COLUMNS: { status: Task['status']; label: string; dot: string }[] = [
 ]
 
 export function SprintBoardClient({ tasks: initialTasks, epics, members }: Props) {
-  // Local state — will be wired to Supabase later
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
 
@@ -46,11 +44,53 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members }: Props
   const taskEpicCodes = [...new Set(tasks.map(t => t.epic_code))]
 
   function handleUpdate(taskId: string, patch: Partial<Task>) {
-    // Optimistic update — UI changes immediately
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...patch } : t))
     setSelectedTask(prev => prev?.id === taskId ? { ...prev, ...patch } : prev)
-    // Persist to DB (fire-and-forget; errors logged in updateTask)
     updateTask(taskId, patch)
+  }
+
+  /** Called by BoardView when a card is dropped onto a column/zone */
+  function handleBoardDrop(
+    draggedId: string,
+    targetStatus: Task['status'],
+    insertBeforeId: string | null,
+  ) {
+    setTasks(prev => {
+      const dragged = prev.find(t => t.id === draggedId)
+      if (!dragged) return prev
+
+      // New ordered list for the target column (excluding the dragged card)
+      const colTasks = prev
+        .filter(t => t.status === targetStatus && t.id !== draggedId)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+
+      const draggedNew: Task = { ...dragged, status: targetStatus }
+
+      if (insertBeforeId) {
+        const idx = colTasks.findIndex(t => t.id === insertBeforeId)
+        colTasks.splice(idx >= 0 ? idx : colTasks.length, 0, draggedNew)
+      } else {
+        colTasks.push(draggedNew)
+      }
+
+      // Assign contiguous sort_order and persist changes
+      const sortMap = new Map<string, number>()
+      colTasks.forEach((t, i) => sortMap.set(t.id, (i + 1) * 10))
+
+      colTasks.forEach((t, i) => {
+        const newOrder = (i + 1) * 10
+        if (t.id === draggedId) {
+          updateTask(t.id, { status: targetStatus, sort_order: newOrder })
+        } else if ((t.sort_order ?? 0) !== newOrder) {
+          updateTask(t.id, { sort_order: newOrder })
+        }
+      })
+
+      return prev.map(t => {
+        if (sortMap.has(t.id)) return { ...t, status: targetStatus, sort_order: sortMap.get(t.id) }
+        return t
+      })
+    })
   }
 
   const selectCls = 'text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer'
@@ -58,7 +98,7 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members }: Props
   return (
     <>
       <div className="space-y-3">
-        {/* Stats bar — reactive to task state */}
+        {/* Stats bar */}
         <div className="flex items-center gap-4 bg-white border border-gray-200 rounded-xl px-5 py-3 shadow-sm">
           <div className="flex items-center gap-1.5 text-sm">
             <Circle size={14} className="text-gray-400" />
@@ -151,7 +191,7 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members }: Props
             tasks={filtered}
             members={members}
             onTaskClick={setSelectedTask}
-            onStatusChange={(id, s) => handleUpdate(id, { status: s })}
+            onDrop={handleBoardDrop}
           />
         ) : (
           <ListView
@@ -162,7 +202,6 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members }: Props
         )}
       </div>
 
-      {/* Task detail modal */}
       {selectedTask && (
         <TaskDetailModal
           task={selectedTask}
@@ -213,7 +252,6 @@ function TaskCard({
       onClick={() => onTaskClick(task)}
       className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-grab active:cursor-grabbing active:opacity-60 active:scale-[0.98] group select-none"
     >
-      {/* Top row */}
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold text-gray-400">{task.epic_code}</span>
         <span
@@ -224,12 +262,10 @@ function TaskCard({
         </span>
       </div>
 
-      {/* Title */}
       <p className="text-sm text-gray-800 leading-snug mb-2.5 group-hover:text-gray-900 line-clamp-3">
         {task.title}
       </p>
 
-      {/* Bottom row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <MemberAvatar code={task.assignee_code} members={members} size={20} />
@@ -247,18 +283,42 @@ function TaskCard({
   )
 }
 
+// ─── Drop Zone (between cards) ───────────────────────────────────────────────
+
+function DropZone({
+  zoneId, activeZone, onEnter, onDrop,
+}: {
+  zoneId: string
+  activeZone: string | null
+  onEnter: (id: string) => void
+  onDrop: (e: React.DragEvent) => void
+}) {
+  const isActive = activeZone === zoneId
+  return (
+    <div
+      onDragEnter={e => { e.preventDefault(); e.stopPropagation(); onEnter(zoneId) }}
+      onDragOver={e => { e.preventDefault(); e.stopPropagation(); onEnter(zoneId) }}
+      onDrop={e => { e.preventDefault(); e.stopPropagation(); onDrop(e) }}
+      className={`transition-all duration-100 rounded ${
+        isActive ? 'h-1.5 bg-indigo-400 shadow-sm' : 'h-2'
+      }`}
+    />
+  )
+}
+
 // ─── Board (Kanban) View ─────────────────────────────────────────────────────
 
 function BoardView({
-  tasks, members, onTaskClick, onStatusChange,
+  tasks, members, onTaskClick, onDrop,
 }: {
   tasks: Task[]
   members: Member[]
   onTaskClick: (t: Task) => void
-  onStatusChange: (id: string, s: Task['status']) => void
+  onDrop: (draggedId: string, targetStatus: Task['status'], insertBeforeId: string | null) => void
 }) {
-  const draggingRef = useRef<string | null>(null)
-  const [dragOverCol, setDragOverCol] = useState<Task['status'] | null>(null)
+  const draggingRef  = useRef<string | null>(null)
+  const [dragOverCol,  setDragOverCol]  = useState<Task['status'] | null>(null)
+  const [dragOverZone, setDragOverZone] = useState<string | null>(null)
 
   function handleDragStart(e: React.DragEvent, task: Task) {
     draggingRef.current = task.id
@@ -266,42 +326,46 @@ function BoardView({
     e.dataTransfer.setData('text/plain', task.id)
   }
 
-  function handleDragEnd(e: React.DragEvent) {
+  function handleDragEnd() {
     draggingRef.current = null
     setDragOverCol(null)
+    setDragOverZone(null)
   }
 
-  function handleDragOver(e: React.DragEvent, status: Task['status']) {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setDragOverCol(status)
-  }
-
-  function handleDrop(e: React.DragEvent, status: Task['status']) {
+  function handleColDrop(e: React.DragEvent, status: Task['status']) {
     e.preventDefault()
     const id = draggingRef.current ?? e.dataTransfer.getData('text/plain')
-    if (id) onStatusChange(id, status)
+    if (id) onDrop(id, status, null)
     setDragOverCol(null)
+    setDragOverZone(null)
+    draggingRef.current = null
+  }
+
+  function handleZoneDrop(e: React.DragEvent, status: Task['status'], insertBeforeId: string | null) {
+    const id = draggingRef.current ?? e.dataTransfer.getData('text/plain')
+    if (id) onDrop(id, status, insertBeforeId)
+    setDragOverCol(null)
+    setDragOverZone(null)
     draggingRef.current = null
   }
 
   return (
     <div className="grid grid-cols-4 gap-4 items-start">
       {COLUMNS.map(col => {
-        const colTasks = tasks.filter(t => t.status === col.status)
-        const isOver   = dragOverCol === col.status
+        const colTasks = tasks
+          .filter(t => t.status === col.status)
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        const isOver = dragOverCol === col.status
 
         return (
           <div
             key={col.status}
             onDragEnter={e => { e.preventDefault(); setDragOverCol(col.status) }}
-            onDragOver={e => handleDragOver(e, col.status)}
-            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(null) }}
-            onDrop={e => handleDrop(e, col.status)}
+            onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) { setDragOverCol(null); setDragOverZone(null) } }}
+            onDrop={e => handleColDrop(e, col.status)}
             className={`rounded-xl border overflow-hidden transition-colors ${
-              isOver
-                ? 'border-indigo-400 bg-indigo-50 shadow-md'
-                : 'border-gray-200 bg-gray-50'
+              isOver ? 'border-indigo-400 bg-indigo-50 shadow-md' : 'border-gray-200 bg-gray-50'
             }`}
           >
             {/* Column header */}
@@ -315,8 +379,8 @@ function BoardView({
               </span>
             </div>
 
-            {/* Drop zone + cards */}
-            <div className={`p-2 space-y-2 min-h-[120px] transition-colors ${isOver ? 'bg-indigo-50' : ''}`}>
+            {/* Cards + drop zones */}
+            <div className={`p-2 min-h-[120px] transition-colors ${isOver ? 'bg-indigo-50' : ''}`}>
               {colTasks.length === 0 ? (
                 <div className={`flex items-center justify-center h-20 rounded-lg border-2 border-dashed transition-colors ${
                   isOver ? 'border-indigo-300 text-indigo-400' : 'border-gray-200 text-gray-400'
@@ -324,22 +388,39 @@ function BoardView({
                   <span className="text-xs">{isOver ? 'Thả vào đây' : 'Trống'}</span>
                 </div>
               ) : (
-                colTasks.map(t => (
-                  <TaskCard
-                    key={t.id}
-                    task={t}
-                    members={members}
-                    onTaskClick={onTaskClick}
-                    onDragStart={handleDragStart}
-                    onDragEnd={handleDragEnd}
+                <>
+                  {/* Drop zone before first card */}
+                  <DropZone
+                    zoneId={`before-${colTasks[0].id}`}
+                    activeZone={dragOverZone}
+                    onEnter={setDragOverZone}
+                    onDrop={e => handleZoneDrop(e, col.status, colTasks[0].id)}
                   />
-                ))
-              )}
-              {/* Extra drop target at bottom when column has cards */}
-              {colTasks.length > 0 && isOver && (
-                <div className="h-8 rounded-lg border-2 border-dashed border-indigo-300 flex items-center justify-center">
-                  <span className="text-xs text-indigo-400">Thả vào đây</span>
-                </div>
+
+                  {colTasks.map((t, idx) => (
+                    <div key={t.id}>
+                      <TaskCard
+                        task={t}
+                        members={members}
+                        onTaskClick={onTaskClick}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                      />
+
+                      {/* Drop zone after each card */}
+                      <DropZone
+                        zoneId={idx < colTasks.length - 1 ? `before-${colTasks[idx + 1].id}` : `end-${col.status}`}
+                        activeZone={dragOverZone}
+                        onEnter={setDragOverZone}
+                        onDrop={e => handleZoneDrop(
+                          e,
+                          col.status,
+                          idx < colTasks.length - 1 ? colTasks[idx + 1].id : null,
+                        )}
+                      />
+                    </div>
+                  ))}
+                </>
               )}
             </div>
           </div>

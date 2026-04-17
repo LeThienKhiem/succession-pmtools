@@ -20,6 +20,7 @@ function mapTask(row: any): Task {
     priority:         row.priority,
     estimated_hours:  row.estimated_hours ?? undefined,
     documents:        row.documents ?? undefined,
+    sort_order:       row.sort_order ?? undefined,
   }
 }
 
@@ -163,6 +164,7 @@ export async function updateTask(id: string, patch: Partial<Task>) {
   if (patch.documents       !== undefined) dbPatch.documents       = patch.documents ?? null
   if (patch.assignee_id     !== undefined) dbPatch.assignee_id     = patch.assignee_id ?? null
   if (patch.day_label       !== undefined) dbPatch.day_label       = patch.day_label
+  if (patch.sort_order      !== undefined) dbPatch.sort_order      = patch.sort_order
 
   if (Object.keys(dbPatch).length === 0) return
   const { error } = await supabase.from('pm_tasks').update(dbPatch).eq('id', id)
