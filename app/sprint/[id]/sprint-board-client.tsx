@@ -267,75 +267,71 @@ function MemberAvatar({ code, members, size = 20 }: { code: string; members: Mem
 // ─── Task Card ───────────────────────────────────────────────────────────────
 
 function TaskCard({
-  task, members, onTaskClick, onDragStart, onDragEnd,
+  task, members, onTaskClick, onDragStart, onDragEnd, onDragOver, onDrop, dropIndicator,
 }: {
   task: Task
   members: Member[]
   onTaskClick: (t: Task) => void
   onDragStart: (e: React.DragEvent, t: Task) => void
-  onDragEnd: (e: React.DragEvent) => void
+  onDragEnd: () => void
+  onDragOver: (e: React.DragEvent, taskId: string) => void
+  onDrop: (e: React.DragEvent, taskId: string) => void
+  dropIndicator: 'top' | 'bottom' | null
 }) {
   const typeStyle = TASK_TYPE_STYLES[task.type]
 
   return (
-    <div
-      draggable
-      onDragStart={e => onDragStart(e, task)}
-      onDragEnd={onDragEnd}
-      onClick={() => onTaskClick(task)}
-      className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-grab active:cursor-grabbing active:opacity-60 active:scale-[0.98] group select-none"
-    >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-gray-400">{task.epic_code}</span>
-        <span
-          className="px-1.5 py-0.5 rounded text-xs font-medium"
-          style={{ backgroundColor: typeStyle.bg, color: typeStyle.text }}
-        >
-          {typeStyle.label}
-        </span>
+    <div className="relative">
+      {/* Top insert line */}
+      {dropIndicator === 'top' && (
+        <div className="absolute -top-px inset-x-0 h-0.5 bg-indigo-400 rounded-full z-10 pointer-events-none" />
+      )}
+
+      <div
+        draggable
+        onDragStart={e => onDragStart(e, task)}
+        onDragEnd={onDragEnd}
+        onDragOver={e => onDragOver(e, task.id)}
+        onDrop={e => onDrop(e, task.id)}
+        onClick={() => onTaskClick(task)}
+        className={`bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing active:opacity-50 active:scale-[0.98] group select-none ${
+          dropIndicator ? 'border-indigo-200' : 'border-gray-200 hover:border-indigo-200'
+        }`}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold text-gray-400">{task.epic_code}</span>
+          <span
+            className="px-1.5 py-0.5 rounded text-xs font-medium"
+            style={{ backgroundColor: typeStyle.bg, color: typeStyle.text }}
+          >
+            {typeStyle.label}
+          </span>
+        </div>
+
+        <p className="text-sm text-gray-800 leading-snug mb-2.5 group-hover:text-gray-900 line-clamp-3">
+          {task.title}
+        </p>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <MemberAvatar code={task.assignee_code} members={members} size={20} />
+            <span className="text-xs text-gray-400">{task.day_label}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {task.priority === 'critical' && <AlertTriangle size={12} className="text-red-500" />}
+            {task.priority === 'priority' && <AlertTriangle size={12} className="text-orange-400" />}
+            {task.estimated_hours && (
+              <span className="text-xs text-gray-400">{task.estimated_hours}h</span>
+            )}
+          </div>
+        </div>
       </div>
 
-      <p className="text-sm text-gray-800 leading-snug mb-2.5 group-hover:text-gray-900 line-clamp-3">
-        {task.title}
-      </p>
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <MemberAvatar code={task.assignee_code} members={members} size={20} />
-          <span className="text-xs text-gray-400">{task.day_label}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {task.priority === 'critical' && <AlertTriangle size={12} className="text-red-500" />}
-          {task.priority === 'priority' && <AlertTriangle size={12} className="text-orange-400" />}
-          {task.estimated_hours && (
-            <span className="text-xs text-gray-400">{task.estimated_hours}h</span>
-          )}
-        </div>
-      </div>
+      {/* Bottom insert line */}
+      {dropIndicator === 'bottom' && (
+        <div className="absolute -bottom-px inset-x-0 h-0.5 bg-indigo-400 rounded-full z-10 pointer-events-none" />
+      )}
     </div>
-  )
-}
-
-// ─── Drop Zone (between cards) ───────────────────────────────────────────────
-
-function DropZone({
-  zoneId, activeZone, onEnter, onDrop,
-}: {
-  zoneId: string
-  activeZone: string | null
-  onEnter: (id: string) => void
-  onDrop: (e: React.DragEvent) => void
-}) {
-  const isActive = activeZone === zoneId
-  return (
-    <div
-      onDragEnter={e => { e.preventDefault(); e.stopPropagation(); onEnter(zoneId) }}
-      onDragOver={e => { e.preventDefault(); e.stopPropagation(); onEnter(zoneId) }}
-      onDrop={e => { e.preventDefault(); e.stopPropagation(); onDrop(e) }}
-      className={`transition-all duration-100 rounded ${
-        isActive ? 'h-1.5 bg-indigo-400 shadow-sm' : 'h-2'
-      }`}
-    />
   )
 }
 
@@ -349,9 +345,16 @@ function BoardView({
   onTaskClick: (t: Task) => void
   onDrop: (draggedId: string, targetStatus: Task['status'], insertBeforeId: string | null) => void
 }) {
-  const draggingRef  = useRef<string | null>(null)
-  const [dragOverCol,  setDragOverCol]  = useState<Task['status'] | null>(null)
-  const [dragOverZone, setDragOverZone] = useState<string | null>(null)
+  const draggingRef = useRef<string | null>(null)
+  const [dragOverCol,    setDragOverCol]    = useState<Task['status'] | null>(null)
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null)
+  const [dragOverPos,    setDragOverPos]    = useState<'top' | 'bottom'>('bottom')
+
+  function clearDrag() {
+    draggingRef.current = null
+    setDragOverCol(null)
+    setDragOverCardId(null)
+  }
 
   function handleDragStart(e: React.DragEvent, task: Task) {
     draggingRef.current = task.id
@@ -359,27 +362,41 @@ function BoardView({
     e.dataTransfer.setData('text/plain', task.id)
   }
 
-  function handleDragEnd() {
-    draggingRef.current = null
-    setDragOverCol(null)
-    setDragOverZone(null)
+  function handleCardDragOver(e: React.DragEvent, taskId: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const pos: 'top' | 'bottom' = e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom'
+    setDragOverCardId(taskId)
+    setDragOverPos(pos)
+  }
+
+  function handleCardDrop(e: React.DragEvent, targetTask: Task, colTasks: Task[]) {
+    e.preventDefault()
+    e.stopPropagation()
+    const id = draggingRef.current ?? e.dataTransfer.getData('text/plain')
+    if (!id || id === targetTask.id) { clearDrag(); return }
+
+    const idx = colTasks.findIndex(t => t.id === targetTask.id)
+    let insertBeforeId: string | null
+    if (dragOverPos === 'top') {
+      insertBeforeId = targetTask.id
+    } else {
+      insertBeforeId = idx < colTasks.length - 1 ? colTasks[idx + 1].id : null
+    }
+
+    onDrop(id, targetTask.status, insertBeforeId)
+    clearDrag()
   }
 
   function handleColDrop(e: React.DragEvent, status: Task['status']) {
     e.preventDefault()
+    // Only fire if not already handled by a card
+    if (dragOverCardId) { clearDrag(); return }
     const id = draggingRef.current ?? e.dataTransfer.getData('text/plain')
     if (id) onDrop(id, status, null)
-    setDragOverCol(null)
-    setDragOverZone(null)
-    draggingRef.current = null
-  }
-
-  function handleZoneDrop(e: React.DragEvent, status: Task['status'], insertBeforeId: string | null) {
-    const id = draggingRef.current ?? e.dataTransfer.getData('text/plain')
-    if (id) onDrop(id, status, insertBeforeId)
-    setDragOverCol(null)
-    setDragOverZone(null)
-    draggingRef.current = null
+    clearDrag()
   }
 
   return (
@@ -388,14 +405,14 @@ function BoardView({
         const colTasks = tasks
           .filter(t => t.status === col.status)
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-        const isOver = dragOverCol === col.status
+        const isOver = dragOverCol === col.status && !dragOverCardId
 
         return (
           <div
             key={col.status}
             onDragEnter={e => { e.preventDefault(); setDragOverCol(col.status) }}
             onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
-            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) { setDragOverCol(null); setDragOverZone(null) } }}
+            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDrag() }}
             onDrop={e => handleColDrop(e, col.status)}
             className={`rounded-xl border overflow-hidden transition-colors ${
               isOver ? 'border-indigo-400 bg-indigo-50 shadow-md' : 'border-gray-200 bg-gray-50'
@@ -412,8 +429,8 @@ function BoardView({
               </span>
             </div>
 
-            {/* Cards + drop zones */}
-            <div className={`p-2 min-h-[120px] transition-colors ${isOver ? 'bg-indigo-50' : ''}`}>
+            {/* Cards */}
+            <div className={`p-2 space-y-2 min-h-[120px] transition-colors ${isOver ? 'bg-indigo-50' : ''}`}>
               {colTasks.length === 0 ? (
                 <div className={`flex items-center justify-center h-20 rounded-lg border-2 border-dashed transition-colors ${
                   isOver ? 'border-indigo-300 text-indigo-400' : 'border-gray-200 text-gray-400'
@@ -421,39 +438,25 @@ function BoardView({
                   <span className="text-xs">{isOver ? 'Thả vào đây' : 'Trống'}</span>
                 </div>
               ) : (
-                <>
-                  {/* Drop zone before first card */}
-                  <DropZone
-                    zoneId={`before-${colTasks[0].id}`}
-                    activeZone={dragOverZone}
-                    onEnter={setDragOverZone}
-                    onDrop={e => handleZoneDrop(e, col.status, colTasks[0].id)}
-                  />
-
-                  {colTasks.map((t, idx) => (
-                    <div key={t.id}>
-                      <TaskCard
-                        task={t}
-                        members={members}
-                        onTaskClick={onTaskClick}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
-                      />
-
-                      {/* Drop zone after each card */}
-                      <DropZone
-                        zoneId={idx < colTasks.length - 1 ? `before-${colTasks[idx + 1].id}` : `end-${col.status}`}
-                        activeZone={dragOverZone}
-                        onEnter={setDragOverZone}
-                        onDrop={e => handleZoneDrop(
-                          e,
-                          col.status,
-                          idx < colTasks.length - 1 ? colTasks[idx + 1].id : null,
-                        )}
-                      />
-                    </div>
-                  ))}
-                </>
+                colTasks.map(t => {
+                  const isOverThis = dragOverCardId === t.id
+                  return (
+                    <TaskCard
+                      key={t.id}
+                      task={t}
+                      members={members}
+                      onTaskClick={onTaskClick}
+                      onDragStart={handleDragStart}
+                      onDragEnd={clearDrag}
+                      onDragOver={handleCardDragOver}
+                      onDrop={(e, taskId) => {
+                        const target = colTasks.find(x => x.id === taskId)!
+                        handleCardDrop(e, target, colTasks)
+                      }}
+                      dropIndicator={isOverThis ? dragOverPos : null}
+                    />
+                  )
+                })
               )}
             </div>
           </div>
