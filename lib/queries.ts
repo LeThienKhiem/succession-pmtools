@@ -152,7 +152,12 @@ export function computeStats(tasks: Task[]) {
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function updateTask(id: string, patch: Partial<Task>) {
+  // Mock IDs (e.g. "s1-03") are not valid UUIDs — skip DB, localStorage handles persistence
+  if (!UUID_RE.test(id)) return
+
   // Map UI fields back to DB columns
   const dbPatch: Record<string, unknown> = {}
   if (patch.title           !== undefined) dbPatch.title           = patch.title
