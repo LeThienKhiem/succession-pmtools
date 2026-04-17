@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Map, Settings, FileBarChart } from 'lucide-react'
+import { LayoutDashboard, Users, Map, Settings, FileBarChart, Bot } from 'lucide-react'
 import { TEAM_MEMBERS } from '@/lib/mock-data'
 
 const NAV = [
@@ -10,6 +10,7 @@ const NAV = [
   { href: '/team',    label: 'Nhân sự dự án',   icon: Users },
   { href: '/roadmap', label: 'Lộ trình',         icon: Map },
   { href: '/report',  label: 'Báo cáo',          icon: FileBarChart },
+  { href: '/bot',     label: 'PM Bot',            icon: Bot },
   { href: '/settings',label: 'Thiết lập',        icon: Settings },
 ]
 
