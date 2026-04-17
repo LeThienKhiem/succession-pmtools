@@ -10,6 +10,7 @@ export interface Proposal {
   new_status:     string
   note:           string
   confidence:     number
+  description?:   string   // new: extracted from BA doc
 }
 
 export interface TimelineRisk {
@@ -120,21 +121,30 @@ export async function POST(req: Request) {
     : ''
 
   const isReport = type === 'report'
+  const isDoc    = type === 'doc-url' || type === 'doc-file'
 
-  const systemPrompt = `Bạn là PM Bot của dự án SuccessionOS. Nhiệm vụ: phân tích tài liệu đầu vào, đề xuất cập nhật trạng thái task, đưa ra gợi ý và cảnh báo timeline.
+  const systemPrompt = `Bạn là PM Bot của dự án SuccessionOS. Nhiệm vụ: phân tích tài liệu đầu vào, đề xuất cập nhật trạng thái task, điền mô tả, đưa ra gợi ý và cảnh báo timeline.
 
 ${brain}${decisionsBlock}${sprintBlock}
 
-Danh sách tasks hiện tại:
+Danh sách tasks hiện tại (id, title, status hiện tại):
 ${JSON.stringify(taskSummary, null, 2)}
 
-Quy tắc:
-- Chỉ đề xuất tasks thực sự có thay đổi trạng thái
+Quy tắc chung:
 - Trả về ĐÚNG task_id từ danh sách trên
 - Confidence: 0.9+ nếu chắc chắn, 0.7–0.9 nếu suy luận, dưới 0.7 thì bỏ qua
-${isReport ? `- Với daily report: phân tích tiến độ dev, đề xuất cập nhật status, đưa gợi ý hành động cụ thể
-- timeline_risks: cảnh báo nếu sprint hiện tại có nguy cơ trễ (pace thấp, quá nhiều blocked, ngày còn ít mà tasks còn nhiều)` : ''}
-- Trả về JSON thuần, không markdown, không giải thích thêm`
+- Trả về JSON thuần, không markdown, không giải thích thêm
+${isDoc ? `
+Quy tắc với BA document:
+- Đề xuất task khi: (1) có thay đổi status, HOẶC (2) tìm thấy nội dung mô tả đủ để điền description
+- Nếu chỉ có mô tả (không đổi status): new_status = current_status
+- description: trích xuất nội dung cụ thể từ tài liệu cho task đó, viết tiếng Việt, 100–350 ký tự, súc tích
+- Nếu tài liệu không đề cập đến task: bỏ qua (đừng bịa description)` : ''}
+${isReport ? `
+Quy tắc với daily report:
+- Phân tích tiến độ dev, đề xuất cập nhật status
+- Đưa gợi ý hành động cụ thể
+- timeline_risks: cảnh báo nếu sprint hiện tại có nguy cơ trễ` : ''}`
 
   const userPrompt = `Phân tích ${inputLabel} sau:
 
@@ -142,8 +152,8 @@ ${inputText}
 
 Trả về JSON object (chỉ JSON, không gì khác):
 {
-  "proposals": [{"task_id":"...","task_title":"...","current_status":"...","new_status":"todo|in-progress|done|blocked","note":"lý do ngắn gọn","confidence":0.95}],
-  "suggestions": ["gợi ý hành động 1","gợi ý 2"],
+  "proposals": [{"task_id":"...","task_title":"...","current_status":"...","new_status":"todo|in-progress|done|blocked","note":"lý do ngắn gọn","confidence":0.95,"description":"mô tả trích từ tài liệu (bỏ qua nếu không có)"}],
+  "suggestions": ["gợi ý hành động 1"],
   "timeline_risks": [{"sprint":"Sprint X","risk":"mô tả rủi ro","severity":"low|medium|high"}]
 }`
 
@@ -151,7 +161,7 @@ Trả về JSON object (chỉ JSON, không gì khác):
   try {
     const msg = await client.messages.create({
       model: 'claude-sonnet-4-5',
-      max_tokens: 2048,
+      max_tokens: 4096,
       system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userPrompt }],
     })

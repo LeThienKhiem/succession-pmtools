@@ -129,7 +129,9 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
     if (!toApply.length) return
     setApplying(true)
     for (const p of toApply) {
-      await updateTask(p.task_id, { status: p.new_status as Task['status'] })
+      const patch: Partial<Task> = { status: p.new_status as Task['status'] }
+      if (p.description) patch.description = p.description
+      await updateTask(p.task_id, patch)
     }
     setApplying(false)
     setApplied(true)
@@ -350,16 +352,34 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{p.task_title}</p>
+                  <div className="flex items-start gap-2">
+                    <p className="flex-1 text-sm font-medium text-gray-900 truncate">{p.task_title}</p>
+                    {p.description && (
+                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-600 border border-indigo-200">
+                        📝 +mô tả
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 mt-1">
-                    <StatusBadge status={p.current_status} />
-                    <span className="text-gray-400 text-xs">→</span>
-                    <StatusBadge status={p.new_status} highlight />
+                    {p.new_status !== p.current_status ? (
+                      <>
+                        <StatusBadge status={p.current_status} />
+                        <span className="text-gray-400 text-xs">→</span>
+                        <StatusBadge status={p.new_status} highlight />
+                      </>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">status không đổi</span>
+                    )}
                     <span className="ml-auto text-xs text-gray-400">
                       {Math.round(p.confidence * 100)}% chắc
                     </span>
                   </div>
                   {p.note && <p className="text-xs text-gray-500 mt-1 line-clamp-1">{p.note}</p>}
+                  {p.description && (
+                    <p className="text-xs text-indigo-700 bg-indigo-50 rounded px-2 py-1 mt-1.5 line-clamp-2 leading-relaxed">
+                      {p.description}
+                    </p>
+                  )}
                 </div>
               </li>
             ))}
@@ -442,7 +462,10 @@ export function BotClient({ tasks, sprints, projectId }: Props) {
           <div className="flex-1">
             <p className="text-sm font-semibold text-green-800">Đã cập nhật thành công!</p>
             <p className="text-xs text-green-600 mt-0.5">
-              {selectedCount} task đã được cập nhật. Vào Sprint Board để kiểm tra.
+              {selectedCount} task đã được cập nhật
+              {proposals.filter(p => p.selected && p.description).length > 0 &&
+                ` (${proposals.filter(p => p.selected && p.description).length} có mô tả mới)`
+              }. Vào Sprint Board để kiểm tra.
             </p>
           </div>
           <button onClick={() => { setApplied(false); setProposals([]); setSuggestions([]); setTimelineRisks([]); setUrl(''); resetFile() }}
