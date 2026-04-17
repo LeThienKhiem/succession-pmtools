@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { Bot, ChevronDown, ChevronUp, Link2, Upload, FileText, Table2, CheckCircle2, AlertTriangle, RotateCcw, Check, X, Loader2, Brain } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Bot, ChevronDown, ChevronUp, Link2, Upload, FileText, Table2, CheckCircle2, AlertTriangle, RotateCcw, Check, X, Loader2, Brain, BookOpen } from 'lucide-react'
 import { DEFAULT_BRAIN } from '@/lib/default-brain'
+import { loadDocs, formatBytes, type ProjectDoc } from '@/lib/project-docs'
 import { updateTask } from '@/lib/queries'
 import type { Task } from '@/lib/mock-data'
 import type { Proposal } from '@/app/api/bot/analyze/route'
@@ -36,7 +37,17 @@ export function BotClient({ tasks }: Props) {
   const [proposals, setProposals] = useState<(Proposal & { selected: boolean })[]>([])
   const [applied, setApplied]     = useState(false)
   const [applying, setApplying]   = useState(false)
+  const [projectDocs, setProjectDocs]           = useState<ProjectDoc[]>([])
+  const [includedDocIds, setIncludedDocIds]      = useState<Set<string>>(new Set())
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Load project docs from localStorage after hydration
+  useEffect(() => {
+    const docs = loadDocs()
+    setProjectDocs(docs)
+    // Auto-select all docs by default
+    setIncludedDocIds(new Set(docs.map(d => d.id)))
+  }, [])
 
   function handleBrainChange(v: string) {
     setBrain(v)
@@ -50,9 +61,17 @@ export function BotClient({ tasks }: Props) {
     setAnalyzing(true)
 
     try {
+      // Build brain = base brain + selected project docs
+      const selectedDocs = projectDocs.filter(d => includedDocIds.has(d.id))
+      const brainWithDocs = selectedDocs.length > 0
+        ? brain + '\n\n## Tài liệu dự án đính kèm\n' + selectedDocs.map(d =>
+            `### ${d.name}\n${d.content.slice(0, 8000)}`
+          ).join('\n\n---\n\n')
+        : brain
+
       const fd = new FormData()
       fd.append('tasks', JSON.stringify(tasks))
-      fd.append('brain', brain)
+      fd.append('brain', brainWithDocs)
 
       if (tab === 'doc') {
         if (docInput === 'url') {
@@ -145,6 +164,42 @@ export function BotClient({ tasks }: Props) {
           </div>
         )}
       </div>
+
+      {/* Project Docs */}
+      {projectDocs.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+            <BookOpen size={14} className="text-indigo-500" />
+            <span className="text-sm font-medium text-gray-700">Tài liệu dự án</span>
+            <span className="text-xs text-gray-400">— bot sẽ đọc tài liệu được tick</span>
+          </div>
+          <ul className="divide-y divide-gray-50">
+            {projectDocs.map(doc => {
+              const on = includedDocIds.has(doc.id)
+              return (
+                <li
+                  key={doc.id}
+                  onClick={() => setIncludedDocIds(prev => {
+                    const n = new Set(prev)
+                    on ? n.delete(doc.id) : n.add(doc.id)
+                    return n
+                  })}
+                  className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${on ? 'bg-indigo-50/40 hover:bg-indigo-50' : 'opacity-50 hover:bg-gray-50'}`}
+                >
+                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${on ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'}`}>
+                    {on && <Check size={9} className="text-white" strokeWidth={3} />}
+                  </div>
+                  <span className="text-base shrink-0">
+                    {doc.name.endsWith('.pdf') ? '📕' : doc.name.endsWith('.docx') ? '📘' : '📝'}
+                  </span>
+                  <span className="flex-1 text-sm text-gray-700 truncate">{doc.name}</span>
+                  <span className="text-xs text-gray-400 shrink-0">{formatBytes(doc.size)}</span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* Tab selector */}
       <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 w-fit">

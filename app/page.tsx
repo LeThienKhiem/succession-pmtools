@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getProject, getMilestones, getSprints, getTasksByProject, getTeamMembers, computeStats } from '@/lib/queries'
 import { PROJECT, GOALS, MILESTONES, SPRINTS as MOCK_SPRINTS, TASKS, TEAM_MEMBERS } from '@/lib/mock-data'
 import { CheckCircle2, Clock, Target, Users, CalendarDays, TrendingUp, AlertTriangle, Zap, ArrowRight } from 'lucide-react'
+import { ProjectDocsPanel } from '@/components/project-docs-panel'
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -147,6 +148,9 @@ export default async function OverviewPage() {
           </div>
         )}
       </div>
+
+      {/* Project Documents */}
+      <ProjectDocsPanel />
 
       {/* Goals + Milestones */}
       <div className="grid grid-cols-2 gap-5">
