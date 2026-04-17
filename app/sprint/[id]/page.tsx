@@ -24,18 +24,22 @@ export default async function SprintPage({ params }: { params: Promise<{ id: str
   }
 
   // Load tasks/epics/members — try Supabase first, fall back to mock
-  let tasks: Task[] = TASKS.filter(t => t.sprint_id === id)
-  let epics         = EPICS.filter(e => e.sprint_id === id)
-  let members       = TEAM_MEMBERS
+  let tasks:      Task[]       = TASKS.filter(t => t.sprint_id === id)
+  let epics                    = EPICS.filter(e => e.sprint_id === id)
+  let members                  = TEAM_MEMBERS
+  let dbSprintId: string | null = null   // Supabase sprint UUID (for inserting new tasks)
+  let projectId:  string | null = null   // Supabase project UUID
 
   try {
     const [project, dbMembers] = await Promise.all([getProject(), getTeamMembers()])
+    projectId = project.id
     if (dbMembers.length > 0) members = dbMembers
 
     // Find DB sprint by name → get its UUID → fetch tasks & epics
     const dbSprints = await getSprints(project.id)
     const dbSprint  = dbSprints.find((s: any) => s.name === sprint!.name)
     if (dbSprint) {
+      dbSprintId = dbSprint.id
       const [dbTasks, dbEpics] = await Promise.all([
         getTasksBySprint(dbSprint.id),
         getEpicsBySprint(dbSprint.id),
@@ -74,7 +78,10 @@ export default async function SprintPage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Stats bar + board — all inside client so stats react to drag/edit */}
-      <SprintBoardClient tasks={tasks} epics={epics} members={members} sprintId={id} />
+      <SprintBoardClient
+        tasks={tasks} epics={epics} members={members} sprintId={id}
+        dbSprintId={dbSprintId} projectId={projectId}
+      />
     </div>
   )
 }

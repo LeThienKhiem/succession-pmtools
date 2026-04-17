@@ -154,6 +154,30 @@ export function computeStats(tasks: Task[]) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+export async function insertTask(t: {
+  sprint_id:      string
+  project_id:     string
+  epic_id?:       string
+  title:          string
+  description?:   string
+  assignee_id?:   string
+  day_label:      string
+  type:           Task['type']
+  status:         Task['status']
+  priority:       Task['priority']
+  estimated_hours?: number
+  documents?:     string[]
+  sort_order?:    number
+}): Promise<Task | null> {
+  const { data, error } = await supabase
+    .from('pm_tasks')
+    .insert({ ...t, is_active: true })
+    .select(TASK_SELECT)
+    .single()
+  if (error) { console.error('insertTask error:', error.message); return null }
+  return mapTask(data)
+}
+
 export async function updateTask(id: string, patch: Partial<Task>) {
   // Mock IDs (e.g. "s1-03") are not valid UUIDs — skip DB, localStorage handles persistence
   if (!UUID_RE.test(id)) return

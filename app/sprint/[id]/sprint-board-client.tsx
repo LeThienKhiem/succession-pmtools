@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { TASK_TYPE_STYLES, STATUS_STYLES, computeStats, type Task, type TaskType } from '@/lib/mock-data'
-import { updateTask } from '@/lib/queries'
+import { updateTask, insertTask } from '@/lib/queries'
 import { AlertTriangle, CheckCircle2, Zap, Circle, Plus, X, Check, Archive } from 'lucide-react'
 import { TaskDetailModal } from '@/components/task-detail-modal'
 
@@ -10,10 +10,12 @@ interface Epic   { id: string; code: string; name: string; color: string }
 interface Member { id: string; code: string; name: string; color: string; role: string }
 
 interface Props {
-  tasks: Task[]
-  epics: Epic[]
-  members: Member[]
-  sprintId: string
+  tasks:       Task[]
+  epics:       Epic[]
+  members:     Member[]
+  sprintId:    string
+  dbSprintId:  string | null  // Supabase sprint UUID — null when DB not connected
+  projectId:   string | null  // Supabase project UUID
 }
 
 // ─── LocalStorage helpers ─────────────────────────────────────────────────────
@@ -65,7 +67,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // ─── SprintBoardClient ────────────────────────────────────────────────────────
 
-export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintId }: Props) {
+export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintId, dbSprintId, projectId }: Props) {
   const [tasks,        setTasks]        = useState<Task[]>(initialTasks)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
 
@@ -176,21 +178,23 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
     }
   }
 
-  function handleAddTask(
+  async function handleAddTask(
     title: string,
     type: TaskType,
     assigneeCode: string,
     status: Task['status'],
   ) {
-    const id      = `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-    const epic    = epics[0]?.code ?? ''
-    const task: Task = {
-      id,
+    const tempId  = `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    const member  = members.find(m => m.code === assigneeCode)
+    const epic    = epics[0]
+
+    const newTask: Task = {
+      id:            tempId,
       sprint_id:     sprintId,
-      epic_id:       epics[0]?.id ?? '',
-      epic_code:     epic,
+      epic_id:       epic?.id ?? '',
+      epic_code:     epic?.code ?? '',
       title:         title.trim(),
-      assignee_id:   members.find(m => m.code === assigneeCode)?.id ?? '',
+      assignee_id:   member?.id ?? '',
       assignee_code: assigneeCode,
       day_label:     '',
       type,
@@ -198,10 +202,48 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
       priority:      'normal',
       sort_order:    Date.now(),
     }
-    const next = [...tasks, task]
-    setTasks(next)
-    saveOrder(sprintId, next)
-    persistNewTask(sprintId, task)
+
+    // 1. Optimistic UI update (instant feedback)
+    const optimisticNext = [...tasks, newTask]
+    setTasks(optimisticNext)
+    saveOrder(sprintId, optimisticNext)
+    persistNewTask(sprintId, newTask)
+
+    // 2. Persist to Supabase if connected
+    if (dbSprintId && projectId) {
+      const saved = await insertTask({
+        sprint_id:   dbSprintId,
+        project_id:  projectId,
+        epic_id:     epic?.id || undefined,
+        title:       title.trim(),
+        assignee_id: member?.id || undefined,
+        day_label:   '',
+        type,
+        status,
+        priority:    'normal',
+        sort_order:  newTask.sort_order,
+      })
+
+      if (saved) {
+        // 3. Swap temp ID → real UUID in state + localStorage
+        setTasks(prev => {
+          const next = prev.map(t =>
+            t.id === tempId
+              ? {
+                  ...saved,
+                  // Keep display fields if join didn't resolve (edge case)
+                  assignee_code: saved.assignee_code || assigneeCode,
+                  epic_code:     saved.epic_code     || epic?.code || '',
+                }
+              : t
+          )
+          saveOrder(sprintId, next)
+          return next
+        })
+        removeNewTask(sprintId, tempId)
+      }
+      // On failure: task stays with temp ID in localStorage — still usable
+    }
   }
 
   const selectCls = 'text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer'
