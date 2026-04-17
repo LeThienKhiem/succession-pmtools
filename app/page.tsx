@@ -3,6 +3,8 @@ import { getProject, getMilestones, getSprints, getTasksByProject, getTeamMember
 import { PROJECT, GOALS, MILESTONES, SPRINTS as MOCK_SPRINTS, TASKS, TEAM_MEMBERS } from '@/lib/mock-data'
 import { CheckCircle2, Clock, Target, Users, CalendarDays, TrendingUp, AlertTriangle, Zap, ArrowRight } from 'lucide-react'
 import { ProjectDocsPanel } from '@/components/project-docs-panel'
+import { DecisionsPanel } from '@/components/decisions-panel'
+import { getDecisions } from '@/lib/queries'
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -15,20 +17,23 @@ export default async function OverviewPage() {
   let milestones = MILESTONES as any[]
   let sprints    = MOCK_SPRINTS as any[]
   let allTasks   = TASKS as any[]
+  let decisions  = [] as any[]
 
   try {
     const dbProject = await getProject()
-    const [dbMembers, dbMilestones, dbSprints, dbTasks] = await Promise.all([
+    const [dbMembers, dbMilestones, dbSprints, dbTasks, dbDecisions] = await Promise.all([
       getTeamMembers(),
       getMilestones(dbProject.id),
       getSprints(dbProject.id),
       getTasksByProject(dbProject.id),
+      getDecisions(dbProject.id),
     ])
     project    = dbProject
     if (dbMembers.length    > 0) members    = dbMembers
     if (dbMilestones.length > 0) milestones = dbMilestones
     if (dbSprints.length    > 0) sprints    = dbSprints
     if (dbTasks.length      > 0) allTasks   = dbTasks
+    decisions = dbDecisions
   } catch {
     // DB unavailable — continue with mock data above
   }
@@ -149,8 +154,11 @@ export default async function OverviewPage() {
         )}
       </div>
 
-      {/* Project Documents */}
-      <ProjectDocsPanel />
+      {/* Two-column: Documents (local) + Decisions (Supabase shared) */}
+      <div className="grid grid-cols-2 gap-5">
+        <ProjectDocsPanel />
+        <DecisionsPanel projectId={project.id} initialDecisions={decisions} />
+      </div>
 
       {/* Goals + Milestones */}
       <div className="grid grid-cols-2 gap-5">

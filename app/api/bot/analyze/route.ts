@@ -23,11 +23,12 @@ export async function POST(req: Request) {
   try { formData = await req.formData() }
   catch { return Response.json({ error: 'Invalid request' }, { status: 400 }) }
 
-  const type   = formData.get('type') as string         // 'doc-url' | 'doc-file' | 'report'
-  const url    = formData.get('url')  as string | null
-  const file   = formData.get('file') as File   | null
-  const tasks  = JSON.parse(formData.get('tasks')  as string ?? '[]')
-  const brain  = formData.get('brain') as string ?? ''
+  const type      = formData.get('type') as string
+  const url       = formData.get('url')  as string | null
+  const file      = formData.get('file') as File   | null
+  const tasks     = JSON.parse(formData.get('tasks')     as string ?? '[]')
+  const brain     = formData.get('brain')     as string ?? ''
+  const decisions = JSON.parse(formData.get('decisions') as string ?? '[]')
 
   // ── Extract text / rows ──────────────────────────────────────────────────
   let inputText = ''
@@ -79,9 +80,16 @@ export async function POST(req: Request) {
   // ── Call Claude with prompt caching ─────────────────────────────────────
   const client = new Anthropic({ apiKey })
 
+  // Append shared decisions to brain
+  const decisionsBlock = decisions.length > 0
+    ? '\n\n## Quyết định & Định hướng dự án\n' + decisions.map((d: any) =>
+        `- [${d.category === 'decision' ? 'Quyết định' : 'Định hướng'}] ${d.title}${d.content ? ': ' + d.content : ''}`
+      ).join('\n')
+    : ''
+
   const systemPrompt = `Bạn là PM Bot của dự án SuccessionOS. Nhiệm vụ: phân tích tài liệu đầu vào và đề xuất cập nhật trạng thái các task.
 
-${brain}
+${brain}${decisionsBlock}
 
 Danh sách tasks hiện tại:
 ${JSON.stringify(taskSummary, null, 2)}

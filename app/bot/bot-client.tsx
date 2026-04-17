@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Bot, ChevronDown, ChevronUp, Link2, Upload, FileText, Table2, CheckCircle2, AlertTriangle, RotateCcw, Check, X, Loader2, Brain, BookOpen } from 'lucide-react'
 import { DEFAULT_BRAIN } from '@/lib/default-brain'
 import { loadDocs, formatBytes, type ProjectDoc } from '@/lib/project-docs'
-import { updateTask } from '@/lib/queries'
+import { updateTask, getDecisions, type Decision } from '@/lib/queries'
 import type { Task } from '@/lib/mock-data'
 import type { Proposal } from '@/app/api/bot/analyze/route'
 
@@ -13,6 +13,7 @@ const LS_BRAIN_KEY = 'pm-project-brain'
 interface Props {
   tasks: Task[]
   members: any[]
+  projectId: string
 }
 
 type Tab = 'doc' | 'report'
@@ -25,7 +26,7 @@ function saveBrain(v: string) {
   try { localStorage.setItem(LS_BRAIN_KEY, v) } catch {}
 }
 
-export function BotClient({ tasks }: Props) {
+export function BotClient({ tasks, projectId }: Props) {
   const [tab, setTab]             = useState<Tab>('doc')
   const [docInput, setDocInput]   = useState<DocInput>('url')
   const [url, setUrl]             = useState('')
@@ -37,17 +38,20 @@ export function BotClient({ tasks }: Props) {
   const [proposals, setProposals] = useState<(Proposal & { selected: boolean })[]>([])
   const [applied, setApplied]     = useState(false)
   const [applying, setApplying]   = useState(false)
-  const [projectDocs, setProjectDocs]           = useState<ProjectDoc[]>([])
-  const [includedDocIds, setIncludedDocIds]      = useState<Set<string>>(new Set())
+  const [projectDocs, setProjectDocs]      = useState<ProjectDoc[]>([])
+  const [includedDocIds, setIncludedDocIds] = useState<Set<string>>(new Set())
+  const [decisions, setDecisions]           = useState<Decision[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Load project docs from localStorage after hydration
+  // Load local docs + Supabase decisions after hydration
   useEffect(() => {
     const docs = loadDocs()
     setProjectDocs(docs)
-    // Auto-select all docs by default
     setIncludedDocIds(new Set(docs.map(d => d.id)))
-  }, [])
+    if (projectId) {
+      getDecisions(projectId).then(setDecisions).catch(() => {})
+    }
+  }, [projectId])
 
   function handleBrainChange(v: string) {
     setBrain(v)
@@ -70,8 +74,9 @@ export function BotClient({ tasks }: Props) {
         : brain
 
       const fd = new FormData()
-      fd.append('tasks', JSON.stringify(tasks))
-      fd.append('brain', brainWithDocs)
+      fd.append('tasks',     JSON.stringify(tasks))
+      fd.append('brain',     brainWithDocs)
+      fd.append('decisions', JSON.stringify(decisions))
 
       if (tab === 'doc') {
         if (docInput === 'url') {

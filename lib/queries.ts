@@ -197,3 +197,47 @@ export async function deleteTeamMember(id: string) {
   const { error } = await supabase.from('pm_team_members').update({ is_active: false }).eq('id', id)
   if (error) console.error('deleteTeamMember error:', error.message)
 }
+
+// ─── Decisions & Direction ────────────────────────────────────────────────────
+
+export interface Decision {
+  id:          string
+  project_id:  string
+  category:    'decision' | 'direction'
+  title:       string
+  content:     string
+  author_name: string
+  created_at:  string
+  updated_at:  string
+}
+
+export async function getDecisions(projectId: string): Promise<Decision[]> {
+  const { data, error } = await supabase
+    .from('pm_decisions')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as Decision[]
+}
+
+export async function addDecision(d: Omit<Decision, 'id' | 'created_at' | 'updated_at'>): Promise<Decision> {
+  const { data, error } = await supabase
+    .from('pm_decisions')
+    .insert({ ...d, is_active: true })
+    .select()
+    .single()
+  if (error) throw error
+  return data as Decision
+}
+
+export async function updateDecision(id: string, patch: Partial<Pick<Decision, 'title' | 'content' | 'category'>>) {
+  const { error } = await supabase.from('pm_decisions').update(patch).eq('id', id)
+  if (error) console.error('updateDecision error:', error.message)
+}
+
+export async function deleteDecision(id: string) {
+  const { error } = await supabase.from('pm_decisions').update({ is_active: false }).eq('id', id)
+  if (error) console.error('deleteDecision error:', error.message)
+}
