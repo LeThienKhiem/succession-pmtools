@@ -246,60 +246,64 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
     }
   }
 
-  const selectCls = 'text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer'
+  const selectCls = 'text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer shadow-sm'
 
   return (
     <>
       <div className="space-y-3">
         {/* Stats bar */}
-        <div className="flex items-center gap-4 bg-white border border-gray-200 rounded-xl px-5 py-3 shadow-sm">
-          <div className="flex items-center gap-1.5 text-sm">
-            <Circle size={14} className="text-gray-400" />
-            <span className="font-semibold text-gray-700">{stats.total}</span>
-            <span className="text-gray-400">tasks</span>
+        <div className="flex items-center gap-4 bg-white border border-slate-100 rounded-2xl px-5 py-3.5 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+          <div className="flex items-center gap-1.5">
+            <Circle size={13} className="text-slate-300" />
+            <span className="text-sm font-bold text-slate-700 tabular-nums">{stats.total}</span>
+            <span className="text-xs text-slate-400">tasks</span>
           </div>
-          <div className="w-px h-4 bg-gray-200" />
-          <div className="flex items-center gap-1.5 text-sm">
-            <Zap size={14} className="text-blue-500" />
-            <span className="font-semibold text-blue-600">{stats.inProgress}</span>
-            <span className="text-gray-400">in-progress</span>
+          <div className="w-px h-4 bg-slate-100" />
+          <div className="flex items-center gap-1.5">
+            <Zap size={13} className="text-blue-400" />
+            <span className="text-sm font-bold text-blue-600 tabular-nums">{stats.inProgress}</span>
+            <span className="text-xs text-slate-400">in-progress</span>
           </div>
-          <div className="flex items-center gap-1.5 text-sm">
-            <CheckCircle2 size={14} className="text-green-500" />
-            <span className="font-semibold text-green-600">{stats.done}</span>
-            <span className="text-gray-400">done</span>
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 size={13} className="text-emerald-400" />
+            <span className="text-sm font-bold text-emerald-600 tabular-nums">{stats.done}</span>
+            <span className="text-xs text-slate-400">done</span>
           </div>
           {stats.blocked > 0 && (
-            <div className="flex items-center gap-1.5 text-sm">
-              <AlertTriangle size={14} className="text-red-500" />
-              <span className="font-semibold text-red-600">{stats.blocked}</span>
-              <span className="text-gray-400">blocked</span>
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle size={13} className="text-red-400" />
+              <span className="text-sm font-bold text-red-500 tabular-nums">{stats.blocked}</span>
+              <span className="text-xs text-slate-400">blocked</span>
             </div>
           )}
-          <div className="w-px h-4 bg-gray-200" />
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-gray-400">Critical:</span>
-            <span className="font-semibold text-red-600">{stats.critical}</span>
-          </div>
+          {stats.critical > 0 && (
+            <>
+              <div className="w-px h-4 bg-slate-100" />
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-400">Critical</span>
+                <span className="text-sm font-bold text-red-500 tabular-nums">{stats.critical}</span>
+              </div>
+            </>
+          )}
           {tasks.filter(t => t.status === 'outline').length > 0 && (
             <>
-              <div className="w-px h-4 bg-gray-200" />
-              <div className="flex items-center gap-1.5 text-sm">
-                <Archive size={13} className="text-gray-400" />
-                <span className="font-semibold text-gray-500">{tasks.filter(t => t.status === 'outline').length}</span>
-                <span className="text-gray-400">archived</span>
+              <div className="w-px h-4 bg-slate-100" />
+              <div className="flex items-center gap-1.5">
+                <Archive size={13} className="text-slate-300" />
+                <span className="text-sm font-bold text-slate-400 tabular-nums">{tasks.filter(t => t.status === 'outline').length}</span>
+                <span className="text-xs text-slate-400">archived</span>
               </div>
             </>
           )}
           <div className="flex-1" />
-          <div className="flex items-center gap-2">
-            <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="flex items-center gap-2.5">
+            <div className="w-28 h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                className="h-full bg-gradient-to-r from-indigo-400 to-violet-500 rounded-full transition-all duration-500"
                 style={{ width: `${stats.total ? Math.round(stats.done * 100 / stats.total) : 0}%` }}
               />
             </div>
-            <span className="text-xs text-gray-500 font-medium">
+            <span className="text-xs font-semibold text-slate-500 tabular-nums">
               {stats.total ? Math.round(stats.done * 100 / stats.total) : 0}%
             </span>
           </div>
@@ -331,16 +335,18 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
             <option value="normal">Normal</option>
           </select>
 
-          <span className="text-xs text-gray-400 ml-1">
+          <span className="text-xs text-slate-400 ml-1 font-medium">
             {filtered.filter(t => t.status !== 'outline').length} tasks
           </span>
           <div className="flex-1" />
 
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+          <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
             {(['board','list'] as const).map(v => (
               <button key={v} onClick={() => setViewMode(v)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                  viewMode === v ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  viewMode === v
+                    ? 'bg-white shadow-sm text-slate-800'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}>
                 {v === 'board' ? 'Kanban' : 'List'}
               </button>
@@ -416,29 +422,34 @@ function TaskCard({
         onDragOver={e => onDragOver(e, task.id)}
         onDrop={e => onDrop(e, task.id)}
         onClick={() => onTaskClick(task)}
-        className={`bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing active:opacity-50 active:scale-[0.98] group select-none ${
-          muted ? 'opacity-50 hover:opacity-80' : ''
-        } ${dropIndicator ? 'border-indigo-200' : 'border-gray-200 hover:border-indigo-200'}`}
+        className={`bg-white border rounded-xl p-3 transition-all cursor-grab active:cursor-grabbing active:opacity-50 active:scale-[0.98] group select-none ${
+          muted ? 'opacity-40 hover:opacity-70' : 'hover:shadow-[0_4px_12px_-2px_rgba(0,0,0,0.1)]'
+        } ${dropIndicator
+          ? 'border-indigo-300 shadow-[0_0_0_2px_rgba(99,102,241,0.15)]'
+          : 'border-slate-100 shadow-[0_1px_3px_-1px_rgba(0,0,0,0.06)] hover:border-slate-200'
+        }`}
       >
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-400">{task.epic_code}</span>
-          <span className="px-1.5 py-0.5 rounded text-xs font-medium"
+          <span className="text-[11px] font-bold text-slate-300 tracking-wide">{task.epic_code}</span>
+          <span className="px-1.5 py-0.5 rounded-md text-[11px] font-semibold"
             style={{ backgroundColor: typeStyle.bg, color: typeStyle.text }}>
             {typeStyle.label}
           </span>
         </div>
-        <p className="text-sm text-gray-800 leading-snug mb-2.5 group-hover:text-gray-900 line-clamp-3">
+        <p className="text-sm text-slate-700 leading-snug mb-2.5 group-hover:text-slate-900 line-clamp-3">
           {task.title}
         </p>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <MemberAvatar code={task.assignee_code} members={members} size={20} />
-            <span className="text-xs text-gray-400">{task.day_label}</span>
+            {task.day_label && <span className="text-[11px] text-slate-300 font-medium">{task.day_label}</span>}
           </div>
           <div className="flex items-center gap-1.5">
-            {task.priority === 'critical' && <AlertTriangle size={12} className="text-red-500" />}
-            {task.priority === 'priority' && <AlertTriangle size={12} className="text-orange-400" />}
-            {task.estimated_hours && <span className="text-xs text-gray-400">{task.estimated_hours}h</span>}
+            {task.priority === 'critical' && <AlertTriangle size={11} className="text-red-400" />}
+            {task.priority === 'priority'  && <AlertTriangle size={11} className="text-orange-300" />}
+            {task.estimated_hours && (
+              <span className="text-[11px] text-slate-300 font-medium tabular-nums">{task.estimated_hours}h</span>
+            )}
           </div>
         </div>
       </div>
@@ -539,43 +550,45 @@ function BoardView({
             onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
             onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDrag() }}
             onDrop={e => handleColDrop(e, col.status)}
-            className={`rounded-xl border overflow-hidden transition-colors flex-shrink-0 ${
+            className={`rounded-2xl border overflow-hidden transition-all duration-200 flex-shrink-0 ${
               col.isArchive ? 'w-52' : 'w-64'
             } ${isOver
-              ? 'border-indigo-400 bg-indigo-50 shadow-md'
+              ? 'border-indigo-300 bg-indigo-50/60 shadow-[0_0_0_3px_rgba(99,102,241,0.12)]'
               : col.isArchive
-              ? 'border-dashed border-gray-300 bg-gray-50/50'
-              : 'border-gray-200 bg-gray-50'
+              ? 'border-dashed border-slate-200 bg-slate-50/40'
+              : 'border-slate-100 bg-slate-50/60 shadow-[0_1px_4px_-1px_rgba(0,0,0,0.04)]'
             }`}
           >
             {/* Column header */}
             <div className={`flex items-center justify-between px-3 py-2.5 border-b ${
-              col.isArchive ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'
+              col.isArchive ? 'border-slate-100 bg-slate-50/80' : 'border-slate-100 bg-white/80'
             }`}>
               <div className="flex items-center gap-2">
                 {col.isArchive
-                  ? <Archive size={13} className="text-gray-400" />
+                  ? <Archive size={13} className="text-slate-300" />
                   : <div className="w-2 h-2 rounded-full" style={{ backgroundColor: col.dot }} />
                 }
-                <span className={`text-sm font-semibold ${col.isArchive ? 'text-gray-400' : 'text-gray-700'}`}>
+                <span className={`text-xs font-semibold uppercase tracking-wide ${
+                  col.isArchive ? 'text-slate-300' : 'text-slate-600'
+                }`}>
                   {col.label}
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full tabular-nums">
                   {colTasks.length}
                 </span>
                 {!col.isArchive && (
                   <button
                     onClick={() => setAddingToCol(isAdding ? null : col.status)}
-                    className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
+                    className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${
                       isAdding
-                        ? 'bg-indigo-100 text-indigo-600'
-                        : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'
+                        ? 'bg-indigo-100 text-indigo-500'
+                        : 'text-slate-300 hover:text-indigo-500 hover:bg-indigo-50'
                     }`}
                     title="Thêm task"
                   >
-                    {isAdding ? <X size={13} /> : <Plus size={13} />}
+                    {isAdding ? <X size={11} /> : <Plus size={11} />}
                   </button>
                 )}
               </div>
@@ -583,7 +596,7 @@ function BoardView({
 
             {/* Quick-add form */}
             {isAdding && (
-              <div className="px-2 pt-2 pb-1 bg-indigo-50/60 border-b border-indigo-100 space-y-1.5">
+              <div className="px-2 pt-2 pb-1.5 bg-indigo-50/50 border-b border-indigo-100/60 space-y-1.5">
                 <input
                   ref={addInputRef}
                   value={newTitle}
@@ -593,45 +606,45 @@ function BoardView({
                     if (e.key === 'Escape') { setAddingToCol(null); setNewTitle('') }
                   }}
                   placeholder="Tiêu đề task..."
-                  className="w-full text-sm border border-indigo-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                  className="w-full text-sm border border-indigo-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white placeholder-slate-300"
                 />
                 <div className="flex gap-1.5">
                   <select value={newType} onChange={e => setNewType(e.target.value as TaskType)}
-                    className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400">
+                    className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-300">
                     {(['spec','story','design','dev','test','review','doc'] as const).map(t => (
                       <option key={t} value={t}>{TASK_TYPE_STYLES[t].label}</option>
                     ))}
                   </select>
                   <select value={newAssignee} onChange={e => setNewAssignee(e.target.value)}
-                    className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400">
+                    className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-300">
                     {members.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
                   </select>
                 </div>
-                <div className="flex gap-1.5 pb-0.5">
+                <div className="flex gap-1.5">
                   <button onClick={() => { setAddingToCol(null); setNewTitle('') }}
-                    className="flex-1 py-1 rounded-lg border border-gray-200 text-xs text-gray-500 hover:bg-gray-100 transition-colors">
+                    className="flex-1 py-1 rounded-lg border border-slate-200 text-xs text-slate-400 hover:bg-slate-50 transition-colors">
                     Hủy
                   </button>
                   <button onClick={confirmAdd} disabled={!newTitle.trim()}
-                    className="flex-1 py-1 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors flex items-center justify-center gap-1">
-                    <Check size={11} /> Thêm
+                    className="flex-1 py-1 rounded-lg bg-indigo-500 text-white text-xs font-semibold hover:bg-indigo-600 disabled:opacity-40 transition-colors flex items-center justify-center gap-1">
+                    <Check size={10} /> Thêm
                   </button>
                 </div>
               </div>
             )}
 
             {/* Cards */}
-            <div className={`p-2 space-y-2 min-h-[80px] transition-colors ${isOver ? 'bg-indigo-50' : ''}`}>
+            <div className={`p-2 space-y-1.5 min-h-[80px] transition-colors ${isOver ? 'bg-indigo-50/40' : ''}`}>
               {colTasks.length === 0 ? (
-                <div className={`flex items-center justify-center h-16 rounded-lg border-2 border-dashed transition-colors ${
+                <div className={`flex items-center justify-center h-16 rounded-xl border-2 border-dashed transition-colors ${
                   isOver
-                    ? 'border-indigo-300 text-indigo-400'
+                    ? 'border-indigo-200 text-indigo-300'
                     : col.isArchive
-                    ? 'border-gray-200 text-gray-300'
-                    : 'border-gray-200 text-gray-400'
+                    ? 'border-slate-100 text-slate-200'
+                    : 'border-slate-100 text-slate-300'
                 }`}>
-                  <span className="text-xs">
-                    {isOver ? 'Thả vào đây' : col.isArchive ? 'Kéo task vào đây để archive' : 'Trống'}
+                  <span className="text-xs font-medium">
+                    {isOver ? 'Thả vào đây' : col.isArchive ? 'Kéo task để archive' : 'Trống'}
                   </span>
                 </div>
               ) : (
@@ -678,18 +691,18 @@ function ListView({ tasks, members, onTaskClick }: {
   return (
     <div className="space-y-4">
       {Object.entries(byDay).map(([day, dayTasks]) => (
-        <div key={day} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-          <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-700">{day}</span>
-            <span className="text-xs text-gray-400">{dayTasks.length} tasks</span>
+        <div key={day} className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-[0_1px_4px_-1px_rgba(0,0,0,0.06)]">
+          <div className="px-4 py-2.5 bg-slate-50/60 border-b border-slate-100 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{day}</span>
+            <span className="text-[11px] font-semibold text-slate-300 tabular-nums">{dayTasks.length} tasks</span>
           </div>
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-slate-50">
             {dayTasks.map(t => {
               const typeStyle   = TASK_TYPE_STYLES[t.type]
               const statusStyle = STATUS_STYLES[t.status]
               return (
                 <div key={t.id} onClick={() => onTaskClick(t)}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/60 transition-colors cursor-pointer">
                   <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: statusStyle.dot }} />
                   <p className="flex-1 text-sm text-gray-800 min-w-0 truncate">{t.title}</p>
                   <div className="flex items-center gap-2 shrink-0">

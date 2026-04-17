@@ -11,7 +11,6 @@ function formatDate(d: string) {
 }
 
 export default async function OverviewPage() {
-  // Try Supabase; fall back to mock data if env vars missing or DB unreachable
   let project    = PROJECT as any
   let members    = TEAM_MEMBERS as any[]
   let milestones = MILESTONES as any[]
@@ -34,67 +33,70 @@ export default async function OverviewPage() {
     if (dbSprints.length    > 0) sprints    = dbSprints
     if (dbTasks.length      > 0) allTasks   = dbTasks
     decisions = dbDecisions
-  } catch {
-    // DB unavailable — continue with mock data above
-  }
+  } catch {}
 
-  const activeSprint = sprints.find((s: any) => s.status === 'active')
+  const activeSprint     = sprints.find((s: any) => s.status === 'active')
   const activeSprintHref = activeSprint
     ? `/sprint/${MOCK_SPRINTS.find(m => m.name === activeSprint.name)?.id ?? activeSprint.id}`
     : null
   const activeStats = activeSprint
     ? computeStats(allTasks.filter((t: any) => t.sprint_id === activeSprint.id))
     : { total: 0, done: 0, inProgress: 0, blocked: 0, critical: 0 }
-
   const totalStats = computeStats(allTasks)
+  const pct = totalStats.total ? Math.round(totalStats.done * 100 / totalStats.total) : 0
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
+
       {/* Project Header */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <div className="flex items-start justify-between mb-5">
-          <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 uppercase tracking-wide whitespace-nowrap ml-4 mt-1">
+      <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Dự án</p>
+            <h1 className="text-xl font-bold text-slate-900">{project.name}</h1>
+          </div>
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200/60 uppercase tracking-wide whitespace-nowrap ml-4 mt-1">
             Đang khởi tạo
           </span>
         </div>
-        <div className="grid grid-cols-3 gap-8">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-              <CalendarDays size={18} className="text-indigo-600" />
+
+        <div className="grid grid-cols-3 gap-6">
+          <div className="flex items-center gap-3.5">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+              <CalendarDays size={17} className="text-indigo-500" />
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">Thời gian thực hiện</p>
-              <p className="text-sm font-semibold text-gray-900">
-                {formatDate(project.start_date)} - {formatDate(project.end_date)}
+              <p className="text-[11px] text-slate-400 font-medium mb-0.5">Thời gian</p>
+              <p className="text-sm font-semibold text-slate-800">
+                {formatDate(project.start_date)} – {formatDate(project.end_date)}
               </p>
             </div>
           </div>
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
-              <TrendingUp size={18} className="text-green-600" />
+
+          <div className="flex items-center gap-3.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+              <TrendingUp size={17} className="text-emerald-500" />
             </div>
             <div className="flex-1">
-              <p className="text-xs text-gray-500 mb-0.5">Tiến độ tổng thể</p>
+              <p className="text-[11px] text-slate-400 font-medium mb-1.5">Tiến độ tổng thể</p>
               <div className="flex items-center gap-3">
-                <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500 rounded-full"
-                    style={{ width: `${totalStats.total ? Math.round(totalStats.done * 100 / totalStats.total) : 0}%` }} />
+                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%` }} />
                 </div>
-                <span className="text-sm font-semibold text-gray-900 shrink-0">
-                  {totalStats.total ? Math.round(totalStats.done * 100 / totalStats.total) : 0}%
-                </span>
+                <span className="text-sm font-bold text-slate-800 shrink-0 tabular-nums">{pct}%</span>
               </div>
             </div>
           </div>
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
-              <Users size={18} className="text-purple-600" />
+
+          <div className="flex items-center gap-3.5">
+            <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
+              <Users size={17} className="text-violet-500" />
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">Nhân sự cốt lõi</p>
-              <p className="text-sm font-semibold text-gray-900">
-                {String(members.length).padStart(2, '0')} Thành viên
+              <p className="text-[11px] text-slate-400 font-medium mb-0.5">Nhân sự cốt lõi</p>
+              <p className="text-sm font-semibold text-slate-800">
+                {String(members.length).padStart(2, '0')} thành viên
               </p>
             </div>
           </div>
@@ -103,58 +105,73 @@ export default async function OverviewPage() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500">Tasks hoàn thành</span>
-            <CheckCircle2 size={16} className="text-green-500" />
+
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Hoàn thành</span>
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <CheckCircle2 size={14} className="text-emerald-500" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">
+          <p className="text-3xl font-bold text-slate-900 tabular-nums leading-none mb-1">
             {activeStats.done}
-            <span className="text-sm font-normal text-gray-400">/{activeStats.total}</span>
+            <span className="text-base font-medium text-slate-300 ml-1">/{activeStats.total}</span>
           </p>
-          <p className="text-xs text-gray-500 mt-1">{activeSprint?.name ?? 'Sprint hiện tại'}</p>
+          <p className="text-[11px] text-slate-400 font-medium">{activeSprint?.name ?? 'Sprint hiện tại'}</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500">Đang thực hiện</span>
-            <Zap size={16} className="text-blue-500" />
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">In Progress</span>
+            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+              <Zap size={14} className="text-blue-500" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{activeStats.inProgress}</p>
-          <p className="text-xs text-gray-500 mt-1">tasks in-progress</p>
+          <p className="text-3xl font-bold text-slate-900 tabular-nums leading-none mb-1">{activeStats.inProgress}</p>
+          <p className="text-[11px] text-slate-400 font-medium">đang thực hiện</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500">Blockers</span>
-            <AlertTriangle size={16} className="text-red-500" />
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Blockers</span>
+            <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
+              <AlertTriangle size={14} className="text-red-400" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-red-600">{activeStats.blocked}</p>
-          <p className="text-xs text-gray-500 mt-1">cần giải quyết</p>
+          <p className="text-3xl font-bold tabular-nums leading-none mb-1"
+            style={{ color: activeStats.blocked > 0 ? '#EF4444' : '#1E293B' }}>
+            {activeStats.blocked}
+          </p>
+          <p className="text-[11px] text-slate-400 font-medium">cần giải quyết</p>
         </div>
 
         {activeSprint && activeSprintHref ? (
           <Link href={activeSprintHref}
-            className="bg-indigo-600 rounded-xl border border-indigo-500 p-4 shadow-sm hover:bg-indigo-700 transition-colors group block">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-indigo-200">Sprint hiện tại</span>
-              <ArrowRight size={16} className="text-indigo-300 group-hover:translate-x-0.5 transition-transform" />
+            className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl p-4 shadow-[0_4px_16px_-4px_rgba(99,102,241,0.5)] hover:shadow-[0_6px_20px_-4px_rgba(99,102,241,0.6)] hover:scale-[1.01] transition-all duration-200 group block">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-semibold text-indigo-200 uppercase tracking-wide">Sprint hiện tại</span>
+              <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
+                <ArrowRight size={14} className="text-white group-hover:translate-x-0.5 transition-transform" />
+              </div>
             </div>
-            <p className="text-2xl font-bold text-white">{activeSprint.name}</p>
-            <p className="text-xs text-indigo-200 mt-1 truncate">{activeSprint.theme}</p>
+            <p className="text-xl font-bold text-white leading-tight mb-1">{activeSprint.name}</p>
+            <p className="text-[11px] text-indigo-200 font-medium truncate">{activeSprint.theme}</p>
           </Link>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-500">Sprint hiện tại</span>
-              <Clock size={16} className="text-indigo-500" />
+          <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Sprint hiện tại</span>
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                <Clock size={14} className="text-indigo-400" />
+              </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900">—</p>
+            <p className="text-3xl font-bold text-slate-300 leading-none mb-1">—</p>
+            <p className="text-[11px] text-slate-400 font-medium">chưa có sprint</p>
           </div>
         )}
       </div>
 
-      {/* Two-column: Documents (local) + Decisions (Supabase shared) */}
+      {/* Documents + Decisions */}
       <div className="grid grid-cols-2 gap-5">
         <ProjectDocsPanel projectId={project.id} />
         <DecisionsPanel projectId={project.id} initialDecisions={decisions} />
@@ -162,40 +179,51 @@ export default async function OverviewPage() {
 
       {/* Goals + Milestones */}
       <div className="grid grid-cols-2 gap-5">
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Target size={16} className="text-indigo-600" />
-            <h2 className="text-sm font-semibold text-gray-900">Mục tiêu chính</h2>
+
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+              <Target size={14} className="text-indigo-500" />
+            </div>
+            <h2 className="text-sm font-semibold text-slate-800">Mục tiêu chính</h2>
           </div>
           <ul className="space-y-3">
             {GOALS.map((goal, i) => (
               <li key={i} className="flex items-start gap-3">
-                <CheckCircle2 size={16} className="text-green-500 mt-0.5 shrink-0" />
-                <span className="text-sm text-gray-700 leading-snug">{goal}</span>
+                <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">
+                  <CheckCircle2 size={12} className="text-emerald-500" />
+                </div>
+                <span className="text-sm text-slate-600 leading-snug">{goal}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Clock size={16} className="text-indigo-600" />
-            <h2 className="text-sm font-semibold text-gray-900">Mốc quan trọng</h2>
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+              <Clock size={14} className="text-violet-500" />
+            </div>
+            <h2 className="text-sm font-semibold text-slate-800">Mốc quan trọng</h2>
           </div>
-          <ol className="space-y-3">
+          <ol className="space-y-3.5">
             {milestones.slice(0, 5).map((ms: any, i: number) => (
               <li key={ms.id} className="flex gap-3">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
-                  ms.is_done ? 'bg-green-500 text-white' : i === 0 ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 ${
+                  ms.is_done
+                    ? 'bg-emerald-500 text-white'
+                    : i === 0
+                    ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-400'
                 }`}>
                   {ms.is_done ? '✓' : i + 1}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-indigo-600 font-medium">
+                  <p className="text-[11px] font-semibold text-indigo-500 mb-0.5">
                     {new Date(ms.target_date ?? ms.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </p>
-                  <p className="text-sm font-semibold text-gray-900 leading-snug">{ms.title}</p>
-                  {ms.description && <p className="text-xs text-gray-500 leading-snug">{ms.description}</p>}
+                  <p className="text-sm font-semibold text-slate-800 leading-snug">{ms.title}</p>
+                  {ms.description && <p className="text-xs text-slate-400 leading-snug mt-0.5">{ms.description}</p>}
                 </div>
               </li>
             ))}
