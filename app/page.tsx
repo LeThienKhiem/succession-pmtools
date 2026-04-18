@@ -106,43 +106,46 @@ export default async function OverviewPage() {
       {/* Quick Stats */}
       <div className="grid grid-cols-4 gap-4">
 
-        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+        {/* Hoàn thành — emerald */}
+        <div className="bg-gradient-to-br from-emerald-50 to-white rounded-2xl border border-emerald-100 p-4 shadow-[0_2px_10px_-2px_rgba(16,185,129,0.12)]">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Hoàn thành</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+            <span className="text-[11px] font-semibold text-emerald-500/80 uppercase tracking-wide">Hoàn thành</span>
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
               <CheckCircle2 size={14} className="text-emerald-500" />
             </div>
           </div>
           <p className="text-3xl font-bold text-slate-900 tabular-nums leading-none mb-1">
             {activeStats.done}
-            <span className="text-base font-medium text-slate-300 ml-1">/{activeStats.total}</span>
+            <span className="text-base font-medium text-emerald-200 ml-1">/{activeStats.total}</span>
           </p>
-          <p className="text-[11px] text-slate-400 font-medium">{activeSprint?.name ?? 'Sprint hiện tại'}</p>
+          <p className="text-[11px] text-emerald-400/80 font-medium">{activeSprint?.name ?? 'Sprint hiện tại'}</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+        {/* In Progress — blue */}
+        <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-100 p-4 shadow-[0_2px_10px_-2px_rgba(59,130,246,0.12)]">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">In Progress</span>
-            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+            <span className="text-[11px] font-semibold text-blue-500/80 uppercase tracking-wide">In Progress</span>
+            <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
               <Zap size={14} className="text-blue-500" />
             </div>
           </div>
           <p className="text-3xl font-bold text-slate-900 tabular-nums leading-none mb-1">{activeStats.inProgress}</p>
-          <p className="text-[11px] text-slate-400 font-medium">đang thực hiện</p>
+          <p className="text-[11px] text-blue-400/80 font-medium">đang thực hiện</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+        {/* Blockers — rose */}
+        <div className="bg-gradient-to-br from-rose-50 to-white rounded-2xl border border-rose-100 p-4 shadow-[0_2px_10px_-2px_rgba(244,63,94,0.12)]">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Blockers</span>
-            <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
-              <AlertTriangle size={14} className="text-red-400" />
+            <span className="text-[11px] font-semibold text-rose-500/80 uppercase tracking-wide">Blockers</span>
+            <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center">
+              <AlertTriangle size={14} className="text-rose-400" />
             </div>
           </div>
           <p className="text-3xl font-bold tabular-nums leading-none mb-1"
-            style={{ color: activeStats.blocked > 0 ? '#EF4444' : '#1E293B' }}>
+            style={{ color: activeStats.blocked > 0 ? '#F43F5E' : '#1E293B' }}>
             {activeStats.blocked}
           </p>
-          <p className="text-[11px] text-slate-400 font-medium">cần giải quyết</p>
+          <p className="text-[11px] text-rose-400/80 font-medium">cần giải quyết</p>
         </div>
 
         {activeSprint && activeSprintHref ? (
@@ -158,15 +161,15 @@ export default async function OverviewPage() {
             <p className="text-[11px] text-indigo-200 font-medium truncate">{activeSprint.theme}</p>
           </Link>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+          <div className="bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 p-4 shadow-[0_2px_10px_-2px_rgba(99,102,241,0.10)]">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Sprint hiện tại</span>
-              <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <span className="text-[11px] font-semibold text-indigo-400/80 uppercase tracking-wide">Sprint hiện tại</span>
+              <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
                 <Clock size={14} className="text-indigo-400" />
               </div>
             </div>
-            <p className="text-3xl font-bold text-slate-300 leading-none mb-1">—</p>
-            <p className="text-[11px] text-slate-400 font-medium">chưa có sprint</p>
+            <p className="text-3xl font-bold text-indigo-200 leading-none mb-1">—</p>
+            <p className="text-[11px] text-indigo-300 font-medium">chưa có sprint</p>
           </div>
         )}
       </div>
@@ -180,9 +183,9 @@ export default async function OverviewPage() {
       {/* Goals + Milestones */}
       <div className="grid grid-cols-2 gap-5">
 
-        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+        <div className="bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 p-5 shadow-[0_2px_10px_-2px_rgba(99,102,241,0.10)]">
           <div className="flex items-center gap-2.5 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
               <Target size={14} className="text-indigo-500" />
             </div>
             <h2 className="text-sm font-semibold text-slate-800">Mục tiêu chính</h2>
@@ -199,9 +202,9 @@ export default async function OverviewPage() {
           </ul>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)]">
+        <div className="bg-gradient-to-br from-violet-50 to-white rounded-2xl border border-violet-100 p-5 shadow-[0_2px_10px_-2px_rgba(139,92,246,0.10)]">
           <div className="flex items-center gap-2.5 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
               <Clock size={14} className="text-violet-500" />
             </div>
             <h2 className="text-sm font-semibold text-slate-800">Mốc quan trọng</h2>
