@@ -13,10 +13,8 @@ import type { Task } from '@/lib/mock-data'
 import type { Proposal, TimelineRisk } from '@/app/api/bot/analyze/route'
 import type { ChatMessage } from '@/app/api/bot/chat/route'
 
-const LS_BRAIN_KEY    = 'pm-project-brain'
-const LS_ACTIVE_USER  = 'pm-bot-active-user'
-
-function lsChatKey(code: string) { return `pm-bot-chat-${code}` }
+const LS_BRAIN_KEY = 'pm-project-brain'
+const LS_CHAT_KEY  = 'pm-bot-chat-history'
 
 function loadBrain() {
   try { return localStorage.getItem(LS_BRAIN_KEY) ?? DEFAULT_BRAIN } catch { return DEFAULT_BRAIN }
@@ -24,20 +22,14 @@ function loadBrain() {
 function saveBrain(v: string) {
   try { localStorage.setItem(LS_BRAIN_KEY, v) } catch {}
 }
-function loadActiveUser(fallback: string): string {
-  try { return localStorage.getItem(LS_ACTIVE_USER) ?? fallback } catch { return fallback }
+function loadChatHistory(): (ChatMessage & { ts: number })[] {
+  try { return JSON.parse(localStorage.getItem(LS_CHAT_KEY) ?? '[]') } catch { return [] }
 }
-function saveActiveUser(code: string) {
-  try { localStorage.setItem(LS_ACTIVE_USER, code) } catch {}
+function saveChatHistory(msgs: (ChatMessage & { ts: number })[]) {
+  try { localStorage.setItem(LS_CHAT_KEY, JSON.stringify(msgs.slice(-60))) } catch {}
 }
-function loadChatHistory(code: string): (ChatMessage & { ts: number })[] {
-  try { return JSON.parse(localStorage.getItem(lsChatKey(code)) ?? '[]') } catch { return [] }
-}
-function saveChatHistory(code: string, msgs: (ChatMessage & { ts: number })[]) {
-  try { localStorage.setItem(lsChatKey(code), JSON.stringify(msgs.slice(-60))) } catch {}
-}
-function clearChatHistory(code: string) {
-  try { localStorage.removeItem(lsChatKey(code)) } catch {}
+function clearChatHistory() {
+  try { localStorage.removeItem(LS_CHAT_KEY) } catch {}
 }
 
 // ─── Smart chunking ──────────────────────────────────────────────────────────
@@ -109,11 +101,6 @@ export function BotClient({ tasks, members, sprints, projectId }: Props) {
   const [decisions,    setDecisions]   = useState<Decision[]>([])
   const [tab,          setTab]         = useState<Tab>('doc')
 
-  // ── Active user (per-member chat history) ────────────────────────────────────
-  const defaultCode = members[0]?.code ?? 'lk'
-  const [activeCode, setActiveCode]   = useState<string>(() =>
-    typeof window !== 'undefined' ? loadActiveUser(defaultCode) : defaultCode
-  )
 
   // ── Analyze state ───────────────────────────────────────────────────────────
   const [docInput,      setDocInput]     = useState<DocInput>('url')
@@ -143,22 +130,15 @@ export function BotClient({ tasks, members, sprints, projectId }: Props) {
     }
   }, [projectId])
 
-  // Reload chat history when active user changes
   useEffect(() => {
-    setChatMessages(loadChatHistory(activeCode))
-    setChatError(null)
-  }, [activeCode])
+    setChatMessages(loadChatHistory())
+  }, [])
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
   function handleBrainChange(v: string) { setBrain(v); saveBrain(v) }
-
-  function switchUser(code: string) {
-    saveActiveUser(code)
-    setActiveCode(code)
-  }
 
   // ── Analyze ─────────────────────────────────────────────────────────────────
   async function handleAnalyze() {
@@ -244,7 +224,7 @@ export function BotClient({ tasks, members, sprints, projectId }: Props) {
     const userMsg: ChatMessage & { ts: number } = { role: 'user', content: text, ts: Date.now() }
     const updated = [...chatMessages, userMsg]
     setChatMessages(updated)
-    saveChatHistory(activeCode, updated)
+    saveChatHistory(updated)
     setChatLoading(true)
 
     try {
@@ -273,7 +253,7 @@ export function BotClient({ tasks, members, sprints, projectId }: Props) {
       const botMsg: ChatMessage & { ts: number } = { role: 'assistant', content: json.message, ts: Date.now() }
       const final = [...updated, botMsg]
       setChatMessages(final)
-      saveChatHistory(activeCode, final)
+      saveChatHistory(final)
     } catch (e: any) {
       setChatError(e.message)
     } finally {
@@ -584,37 +564,6 @@ export function BotClient({ tasks, members, sprints, projectId }: Props) {
       {tab === 'chat' && (
         <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_1px_6px_-1px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 260px)', minHeight: '420px' }}>
 
-          {/* User picker bar */}
-          <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 bg-slate-50/60 overflow-x-auto shrink-0">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide shrink-0">Chat với tư cách</span>
-            <div className="flex items-center gap-1.5">
-              {members.map(m => {
-                const active = m.code === activeCode
-                return (
-                  <button
-                    key={m.code}
-                    onClick={() => switchUser(m.code)}
-                    title={m.name}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-150 shrink-0 ${
-                      active
-                        ? 'text-white shadow-sm scale-105'
-                        : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
-                    }`}
-                    style={active ? { backgroundColor: m.color } : {}}
-                  >
-                    <span
-                      className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
-                      style={{ backgroundColor: active ? 'rgba(255,255,255,0.25)' : m.color, color: 'white' }}
-                    >
-                      {m.code.slice(0, 2).toUpperCase()}
-                    </span>
-                    {m.name.split(' ').slice(-1)[0]}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             {chatMessages.length === 0 && (
@@ -642,30 +591,26 @@ export function BotClient({ tasks, members, sprints, projectId }: Props) {
               </div>
             )}
 
-            {chatMessages.map((msg, i) => {
-              const activeMember = members.find(m => m.code === activeCode)
-              return (
+            {chatMessages.map((msg, i) => (
               <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
-                  msg.role === 'assistant' ? 'bg-slate-100' : ''
-                }`}
-                  style={msg.role === 'user' && activeMember ? { backgroundColor: activeMember.color } : {}}>
+                <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
+                  msg.role === 'user' ? 'bg-indigo-500' : 'bg-slate-100'
+                }`}>
                   {msg.role === 'user'
-                    ? (activeMember ? activeMember.code.slice(0, 2).toUpperCase() : <User size={14} className="text-white" />)
+                    ? <User size={14} className="text-white" />
                     : <Bot size={14} className="text-slate-500" />
                   }
                 </div>
                 <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                   msg.role === 'user'
-                    ? 'text-white rounded-tr-sm whitespace-pre-wrap'
+                    ? 'bg-indigo-500 text-white rounded-tr-sm whitespace-pre-wrap'
                     : 'bg-slate-100 text-slate-800 rounded-tl-sm'
                 }`}
-                  style={msg.role === 'user' && activeMember ? { backgroundColor: activeMember.color } : {}}
                 >
                   {msg.role === 'user' ? msg.content : renderMarkdown(msg.content)}
                 </div>
               </div>
-            )})}
+            ))}
 
             {chatLoading && (
               <div className="flex gap-3">
@@ -695,7 +640,7 @@ export function BotClient({ tasks, members, sprints, projectId }: Props) {
           {/* Clear history */}
           {chatMessages.length > 0 && (
             <div className="px-4 py-1.5 border-t border-slate-50 flex justify-end">
-              <button onClick={() => { setChatMessages([]); clearChatHistory(activeCode) }}
+              <button onClick={() => { setChatMessages([]); clearChatHistory() }}
                 className="text-xs text-slate-300 hover:text-slate-500 transition-colors">
                 Xóa lịch sử
               </button>
@@ -704,26 +649,20 @@ export function BotClient({ tasks, members, sprints, projectId }: Props) {
 
           {/* Input */}
           <div className="px-4 pb-4 pt-2 border-t border-slate-100">
-            {(() => {
-              const activeMember = members.find(m => m.code === activeCode)
-              return (
-                <div className="flex gap-2">
-                  <input
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChat() } }}
-                    placeholder={`${activeMember?.name.split(' ').slice(-1)[0] ?? 'Bạn'} hỏi về tiến độ, task, sprint...`}
-                    className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-slate-50/50 placeholder:text-slate-400"
-                    disabled={chatLoading}
-                  />
-                  <button onClick={handleChat} disabled={chatLoading || !chatInput.trim()}
-                    className="w-10 h-10 rounded-xl text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:scale-105 shrink-0"
-                    style={{ backgroundColor: activeMember?.color ?? '#6366F1' }}>
-                    <Send size={15} />
-                  </button>
-                </div>
-              )
-            })()}
+            <div className="flex gap-2">
+              <input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChat() } }}
+                placeholder="Hỏi về tiến độ, task, sprint..."
+                className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-slate-50/50 placeholder:text-slate-400"
+                disabled={chatLoading}
+              />
+              <button onClick={handleChat} disabled={chatLoading || !chatInput.trim()}
+                className="w-10 h-10 rounded-xl bg-indigo-500 text-white flex items-center justify-center hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0">
+                <Send size={15} />
+              </button>
+            </div>
           </div>
         </div>
       )}
