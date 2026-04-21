@@ -55,8 +55,14 @@ export default async function OverviewPage() {
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Dự án</p>
             <h1 className="text-xl font-bold text-slate-900">{project.name}</h1>
           </div>
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200/60 uppercase tracking-wide whitespace-nowrap ml-4 mt-1">
-            Đang khởi tạo
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold border uppercase tracking-wide whitespace-nowrap ml-4 mt-1 ${
+            activeSprint
+              ? 'bg-indigo-50 text-indigo-600 border-indigo-200/60'
+              : project.status === 'completed'
+              ? 'bg-emerald-50 text-emerald-600 border-emerald-200/60'
+              : 'bg-amber-50 text-amber-600 border-amber-200/60'
+          }`}>
+            {activeSprint ? `${activeSprint.name} đang chạy` : project.status === 'completed' ? 'Hoàn thành' : 'Đang khởi tạo'}
           </span>
         </div>
 
@@ -115,10 +121,10 @@ export default async function OverviewPage() {
             </div>
           </div>
           <p className="text-3xl font-bold text-slate-900 tabular-nums leading-none mb-1">
-            {activeStats.done}
-            <span className="text-base font-medium text-emerald-200 ml-1">/{activeStats.total}</span>
+            {totalStats.done}
+            <span className="text-base font-medium text-slate-300 ml-1">/{totalStats.total}</span>
           </p>
-          <p className="text-[11px] text-emerald-400/80 font-medium">{activeSprint?.name ?? 'Sprint hiện tại'}</p>
+          <p className="text-[11px] text-emerald-400/80 font-medium">tasks toàn dự án</p>
         </div>
 
         {/* In Progress — blue */}
@@ -129,8 +135,10 @@ export default async function OverviewPage() {
               <Zap size={14} className="text-blue-500" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-slate-900 tabular-nums leading-none mb-1">{activeStats.inProgress}</p>
-          <p className="text-[11px] text-blue-400/80 font-medium">đang thực hiện</p>
+          <p className="text-3xl font-bold text-slate-900 tabular-nums leading-none mb-1">{totalStats.inProgress}</p>
+          <p className="text-[11px] text-blue-400/80 font-medium">
+            {activeSprint ? `trong ${activeSprint.name}` : 'đang thực hiện'}
+          </p>
         </div>
 
         {/* Blockers — rose */}
@@ -142,8 +150,8 @@ export default async function OverviewPage() {
             </div>
           </div>
           <p className="text-3xl font-bold tabular-nums leading-none mb-1"
-            style={{ color: activeStats.blocked > 0 ? '#F43F5E' : '#1E293B' }}>
-            {activeStats.blocked}
+            style={{ color: totalStats.blocked > 0 ? '#F43F5E' : '#1E293B' }}>
+            {totalStats.blocked}
           </p>
           <p className="text-[11px] text-rose-400/80 font-medium">cần giải quyết</p>
         </div>
