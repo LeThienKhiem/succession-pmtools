@@ -10,12 +10,13 @@ interface Epic   { id: string; code: string; name: string; color: string }
 interface Member { id: string; code: string; name: string; color: string; role: string }
 
 interface Props {
-  tasks:       Task[]
-  epics:       Epic[]
-  members:     Member[]
-  sprintId:    string
-  dbSprintId:  string | null  // Supabase sprint UUID — null when DB not connected
-  projectId:   string | null  // Supabase project UUID
+  tasks:            Task[]
+  epics:            Epic[]
+  members:          Member[]
+  sprintId:         string
+  dbSprintId:       string | null  // Supabase sprint UUID — null when DB not connected
+  projectId:        string | null  // Supabase project UUID
+  sprintCompleted?: boolean        // if true, don't override statuses from localStorage
 }
 
 // ─── LocalStorage helpers ─────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // ─── SprintBoardClient ────────────────────────────────────────────────────────
 
-export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintId, dbSprintId, projectId }: Props) {
+export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintId, dbSprintId, projectId, sprintCompleted }: Props) {
   const [tasks,        setTasks]        = useState<Task[]>(initialTasks)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
 
@@ -92,7 +93,15 @@ export function SprintBoardClient({ tasks: initialTasks, epics, members, sprintI
       result = [...result, ...newTasks.filter(t => !existingIds.has(t.id))]
 
       // 3. Apply status/sort_order overrides last (drag-drop order takes final precedence)
-      if (saved) result = result.map(t => saved[t.id] ? { ...t, ...saved[t.id] } : t)
+      //    Skip status override for completed sprints — server data is source of truth
+      if (saved) result = result.map(t => {
+        if (!saved[t.id]) return t
+        if (sprintCompleted) {
+          const { status: _s, ...rest } = saved[t.id]
+          return Object.keys(rest).length ? { ...t, ...rest } : t
+        }
+        return { ...t, ...saved[t.id] }
+      })
       return result
     })
   }, [sprintId])

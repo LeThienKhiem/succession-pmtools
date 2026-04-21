@@ -81,6 +81,7 @@ export default async function SprintPage({ params }: { params: Promise<{ id: str
       <SprintBoardClient
         tasks={tasks} epics={epics} members={members} sprintId={id}
         dbSprintId={dbSprintId} projectId={projectId}
+        sprintCompleted={sprint.status === 'completed'}
       />
     </div>
   )
