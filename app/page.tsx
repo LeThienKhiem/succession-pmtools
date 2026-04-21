@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import { getProject, getMilestones, getSprints, getTasksByProject, getTeamMembers, computeStats } from '@/lib/queries'
 import { PROJECT, GOALS, MILESTONES, SPRINTS as MOCK_SPRINTS, TASKS, TEAM_MEMBERS } from '@/lib/mock-data'
