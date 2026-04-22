@@ -1,5 +1,7 @@
+export const dynamic = 'force-dynamic'
+
 import { getProject, getMilestones, getSprints, getTasksByProject, getTeamMembers, computeStats } from '@/lib/queries'
-import { EPICS, TASK_TYPE_STYLES, STATUS_STYLES, PRIORITY_STYLES } from '@/lib/mock-data'
+import { PROJECT, MILESTONES, SPRINTS as MOCK_SPRINTS, TASKS, TEAM_MEMBERS, EPICS, TASK_TYPE_STYLES, STATUS_STYLES, PRIORITY_STYLES } from '@/lib/mock-data'
 import { CheckCircle2, AlertTriangle, Clock, Users, Target, TrendingUp, Zap, FileBarChart, Circle } from 'lucide-react'
 
 function fmt(d: string) {
@@ -11,19 +13,35 @@ function fmtShort(d: string) {
 }
 
 export default async function ReportPage() {
-  const project    = await getProject()
-  const milestones = await getMilestones(project.id)
-  const sprints    = await getSprints(project.id)
-  const allTasks   = await getTasksByProject(project.id)
-  const members    = await getTeamMembers()
+  // Load from DB, fall back to mock if unavailable
+  let project    = PROJECT as any
+  let milestones = MILESTONES as any[]
+  let allTasks   = TASKS as any[]
+  let members    = TEAM_MEMBERS as any[]
 
-  const total    = computeStats(allTasks)
-  const activeSprint = sprints.find(s => s.status === 'active')
+  try {
+    const dbProject = await getProject()
+    const [dbMilestones, dbTasks, dbMembers] = await Promise.all([
+      getMilestones(dbProject.id),
+      getTasksByProject(dbProject.id),
+      getTeamMembers(),
+    ])
+    project    = dbProject
+    if (dbMilestones.length > 0) milestones = dbMilestones
+    if (dbTasks.length    > 0) allTasks   = dbTasks
+    if (dbMembers.length  > 0) members    = dbMembers
+  } catch {}
 
-  // Per-sprint stats
-  const sprintStats = sprints.map(s => ({
+  // Always use MOCK_SPRINTS for status/metadata (source of truth)
+  const sprints      = MOCK_SPRINTS
+  const activeSprint = MOCK_SPRINTS.find(s => s.status === 'active')
+
+  const total = computeStats(allTasks)
+
+  // Per-sprint stats — match tasks by sprint_id (mock IDs like 'sp-1')
+  const sprintStats = MOCK_SPRINTS.map(s => ({
     sprint: s,
-    stats: computeStats(allTasks.filter(t => t.sprint_id === s.id)),
+    stats: computeStats(allTasks.filter((t: any) => t.sprint_id === s.id)),
   }))
 
   // Per-epic stats
@@ -293,7 +311,7 @@ export default async function ReportPage() {
             </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-2">
               {criticalTasks.map((task, i) => {
-                const sprintName = sprints.find(s => s.id === task.sprint_id)?.name ?? task.sprint_id
+                const sprintName = MOCK_SPRINTS.find(s => s.id === task.sprint_id)?.name ?? task.sprint_id
                 const statusStyle = STATUS_STYLES[task.status]
                 return (
                   <div key={task.id} className="flex items-start gap-2.5 py-1">
@@ -351,7 +369,7 @@ export default async function ReportPage() {
                       <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-600 text-[11px] rounded-full font-semibold">Xong</span>
                     )}
                   </div>
-                  <p className="text-[11px] text-indigo-500 font-semibold mt-0.5">{fmt(ms.target_date)}</p>
+                  <p className="text-[11px] text-indigo-500 font-semibold mt-0.5">{fmt(ms.target_date ?? ms.date)}</p>
                   {ms.description && <p className="text-xs text-slate-400 leading-snug mt-0.5">{ms.description}</p>}
                 </div>
               </div>

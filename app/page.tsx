@@ -37,10 +37,10 @@ export default async function OverviewPage() {
     decisions = dbDecisions
   } catch {}
 
-  const activeSprint     = sprints.find((s: any) => s.status === 'active')
-  const activeSprintHref = activeSprint
-    ? `/sprint/${MOCK_SPRINTS.find(m => m.name === activeSprint.name)?.id ?? activeSprint.id}`
-    : null
+  // Always use MOCK_SPRINTS as source-of-truth for sprint status
+  // (DB may have stale status values not yet synced)
+  const activeSprint     = MOCK_SPRINTS.find(s => s.status === 'active')
+  const activeSprintHref = activeSprint ? `/sprint/${activeSprint.id}` : null
   const activeStats = activeSprint
     ? computeStats(allTasks.filter((t: any) => t.sprint_id === activeSprint.id))
     : { total: 0, done: 0, inProgress: 0, blocked: 0, critical: 0 }
